@@ -53,6 +53,9 @@ jobs:
       }
       kotlinOptions { jvmTarget = "17" }
      }
+     dependencies {
+      implementation("ai.picovoice:porcupine-android:3.0.3")
+     }
      JEOF
      mkdir -p app/src/main
      cat > app/src/main/AndroidManifest.xml <<'JEOF'
