@@ -209,8 +209,7 @@ jobs:
 
               private fun findNumber(name: String): String? {
                   if (name.isBlank() || checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return null
-                  val P = ContactsContract.CommonDataKinds.Phone
-                  contentResolver.query(P.CONTENT_URI, arrayOf(P.NUMBER), P.DISPLAY_NAME + " LIKE ?", arrayOf("%$name%"), null)?.use {
+                  contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER), ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIKE ?", arrayOf("%$name%"), null)?.use {
                       if (it.moveToFirst()) return it.getString(0)
                   }
                   return null
@@ -392,4 +391,4 @@ jobs:
         with:
           name: jarvis-apk
           path: app/build/outputs/apk/debug/app-debug.apk
-          
+        
