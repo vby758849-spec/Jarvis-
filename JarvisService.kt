@@ -17,6 +17,10 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.telephony.SmsManager
+import android.widget.Toast
+import ai.picovoice.porcupine.Porcupine
+import ai.picovoice.porcupine.PorcupineManager
+import ai.picovoice.porcupine.PorcupineManagerCallback
 import java.text.SimpleDateFormat
 import java.net.HttpURLConnection
 import java.net.URL
@@ -31,6 +35,9 @@ class JarvisService : Service(), RecognitionListener {
  private var ttsReady = false
  private val h = Handler(Looper.getMainLooper())
  private var awake = false
+ private var porc: PorcupineManager? = null
+ @Volatile private var asking = false
+ @Volatile private var lastErr = ""
  private val sp by lazy { getSharedPreferences("j", Context.MODE_PRIVATE) }
  private val hist = ArrayList<Pair<String, String>>()
  @Volatile private var speaking = false
@@ -62,10 +69,11 @@ class JarvisService : Service(), RecognitionListener {
   for (st in intArrayOf(AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM)) try { am.adjustStreamVolume(st, AudioManager.ADJUST_MUTE, 0) } catch (e: Exception) {}
   sr = SpeechRecognizer.createSpeechRecognizer(this)
   sr.setRecognitionListener(this)
-  listen()
+  initWake()
  }
  override fun onDestroy() {
   h.removeCallbacksAndMessages(null)
+  try { porc?.stop(); porc?.delete() } catch (e: Exception) { }
   sr.destroy(); tts?.shutdown()
   beep(false)
   for (st in intArrayOf(AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM)) try { am.adjustStreamVolume(st, AudioManager.ADJUST_UNMUTE, 0) } catch (e: Exception) {}
@@ -92,11 +100,11 @@ class JarvisService : Service(), RecognitionListener {
  }
  override fun onResults(b: Bundle?) {
   b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { process(it.lowercase()) }
-  h.postDelayed({ listen() }, 400)
+  if (porc == null) h.postDelayed({ listen() }, 400) else if (!asking) resume()
  }
  override fun onError(e: Int) {
   sr.cancel()
-  h.postDelayed({ listen() }, if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 400)
+  if (porc == null) h.postDelayed({ listen() }, if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 400) else resume()
  }
  override fun onReadyForSpeech(p: Bundle?) {}
  override fun onBeginningOfSpeech() {}
@@ -140,6 +148,33 @@ class JarvisService : Service(), RecognitionListener {
    else -> ask(s0)
   }
  }
+ private fun initWake() {
+  val k = sp.getString("pico", "")?.trim().orEmpty()
+  if (k.isNotEmpty()) {
+   try {
+    porc = PorcupineManager.Builder().setAccessKey(k).setKeyword(Porcupine.BuiltInKeyword.JARVIS)
+     .setSensitivity(0.7f).build(this, PorcupineManagerCallback { h.post { onWake() } })
+    porc?.start()
+    return
+   } catch (e: Exception) {
+    porc = null
+    say("Picovoice key check karo, purane tareeke se chala raha hoon")
+   }
+  }
+  listen()
+ }
+ private fun onWake() {
+  try { porc?.stop() } catch (e: Exception) { }
+  awake = true
+  say("Ji?")
+  listen()
+ }
+ private fun resume() {
+  awake = false
+  if (porc == null) { listen(); return }
+  if (speaking) { h.postDelayed({ resume() }, 700); return }
+  try { porc?.start() } catch (e: Exception) { h.postDelayed({ resume() }, 1500) }
+ }
  private fun applyVoice() {
   tts?.setPitch(0.7f)
   val v = (tts?.voices ?: emptySet<android.speech.tts.Voice>())
@@ -155,15 +190,19 @@ class JarvisService : Service(), RecognitionListener {
  private fun ask(q: String) {
   val key = sp.getString("key", "")?.trim().orEmpty()
   if (key.isEmpty()) { say("Pehle app mein Gemini API key daalo"); return }
+  asking = true
   Thread {
    val ans = callGemini(key, q)
    h.post {
-    if (ans == null) say("Jawab nahi mil paya, internet ya key check karo")
+    asking = false
+    if (ans == null) { say("Jawab nahi mil paya, screen par error dekho"); Toast.makeText(this, lastErr, Toast.LENGTH_LONG).show(); resume() }
     else {
      hist.add(q to ans); if (hist.size > 6) hist.removeAt(0)
      say(ans.replace(Regex("[*#`_]"), ""))
-     h.postDelayed({ awake = true }, 2500)
-     h.postDelayed({ awake = false }, 25000)
+     if (porc == null) {
+      h.postDelayed({ awake = true }, 2500)
+      h.postDelayed({ awake = false }, 25000)
+     } else { awake = true; listen() }
     }
    }
   }.start()
@@ -176,6 +215,7 @@ class JarvisService : Service(), RecognitionListener {
   contents.put(jm("user", q))
   val body = JSONObject().put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", sys))))
    .put("contents", contents).toString()
+  var err = ""
   for (m in arrayOf("gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash")) {
    try {
     val c = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
@@ -188,9 +228,10 @@ class JarvisService : Service(), RecognitionListener {
      val sb = StringBuilder()
      for (i in 0 until ps.length()) sb.append(ps.getJSONObject(i).optString("text"))
      if (sb.isNotBlank()) return sb.toString().trim()
-    }
-   } catch (e: Exception) { }
+    } else err = m + " " + c.responseCode + " " + (c.errorStream?.bufferedReader()?.readText() ?: "").take(200)
+   } catch (e: Exception) { err = m + " " + e }
   }
+  lastErr = err
   return null
  }
  private fun go(i: Intent): Boolean = try {
