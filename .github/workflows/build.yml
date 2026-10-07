@@ -30,6 +30,7 @@ jobs:
      cat > gradle.properties <<'JEOF'
      org.gradle.jvmargs=-Xmx3g
      android.nonTransitiveRClass=true
+     android.useAndroidX=true
      JEOF
      mkdir -p app
      cat > app/build.gradle.kts <<'JEOF'
