@@ -33,16 +33,20 @@ class MainActivity : Activity() {
    hint = "Gemini API key"; setText(sp.getString("key", "")); setSingleLine(true)
    setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
   }
+  val pico = EditText(this).apply {
+   hint = "Picovoice AccessKey"; setText(sp.getString("pico", "")); setSingleLine(true)
+   setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+  }
   val prof = EditText(this).apply {
    hint = "Mere baare mein"; setText(sp.getString("prof", DEF)); minLines = 4
    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
    setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
   }
-  l.addView(key); l.addView(prof)
+  l.addView(key); l.addView(pico); l.addView(prof)
   l.addView(Button(this).apply {
    text = "Save (key + meri jaankari)"
    setOnClickListener {
-    sp.edit().putString("key", key.text.toString().trim()).putString("prof", prof.text.toString()).apply()
+    sp.edit().putString("key", key.text.toString().trim()).putString("pico", pico.text.toString().trim()).putString("prof", prof.text.toString()).apply()
     Toast.makeText(this@MainActivity, "Save ho gaya", Toast.LENGTH_SHORT).show()
    }
   })
