@@ -119,7 +119,7 @@ class JarvisService : Service(), RecognitionListener {
    val rest = s.substring(m.range.last + 1).trim()
    if (rest.isNotEmpty()) { awake = false; handle(rest) }
    else {
-    say("Ji, boliye")
+    say("Ji sir, boliye")
     h.postDelayed({ awake = true }, 1500)
     h.postDelayed({ awake = false }, 20000)
    }
@@ -129,7 +129,7 @@ class JarvisService : Service(), RecognitionListener {
   val s = s0.replace("whats app", "whatsapp").replace("you tube", "youtube")
   when {
    Regex("awaaz badlo|awaz badlo|voice change|change voice").containsMatchIn(s) -> {
-    sp.edit().putInt("vi", sp.getInt("vi", 0) + 1).apply(); applyVoice()
+    sp.edit().putInt("vj", sp.getInt("vj", 0) + 1).apply(); applyVoice()
     say("Ye meri nayi awaaz hai, pasand aayi?")
    }
    Regex("^(yaad rakh|yaad rakho|remember)").containsMatchIn(s) -> remember(s)
@@ -166,7 +166,7 @@ class JarvisService : Service(), RecognitionListener {
  private fun onWake() {
   try { porc?.stop() } catch (e: Exception) { }
   awake = true
-  say("Ji?")
+  say("Ji sir?")
   listen()
  }
  private fun resume() {
@@ -176,10 +176,12 @@ class JarvisService : Service(), RecognitionListener {
   try { porc?.start() } catch (e: Exception) { h.postDelayed({ resume() }, 1500) }
  }
  private fun applyVoice() {
-  tts?.setPitch(0.7f)
+  tts?.setPitch(0.75f); tts?.setSpeechRate(0.92f)
+  val pref = Regex("gbb|gbd|rjs|hic|hid|end")
   val v = (tts?.voices ?: emptySet<android.speech.tts.Voice>())
-   .filter { it.locale.language == "hi" || it.locale == Locale("en", "IN") }.sortedBy { it.name }
-  if (v.isNotEmpty()) tts?.voice = v[sp.getInt("vi", 0) % v.size]
+   .filter { it.locale.language == "hi" || it.locale == Locale("en", "IN") || it.locale == Locale.UK }
+   .sortedWith(compareBy({ !pref.containsMatchIn(it.name) }, { it.name }))
+  if (v.isNotEmpty()) tts?.voice = v[sp.getInt("vj", 0) % v.size]
  }
  private fun remember(s: String) {
   val fact = s.replace(Regex("^(yaad rakh|yaad rakho|remember)( ki| that)?"), "").trim()
@@ -208,7 +210,7 @@ class JarvisService : Service(), RecognitionListener {
   }.start()
  }
  private fun callGemini(key: String, q: String): String? {
-  val sys = "Tum Jarvis ho, Vaibhav ke personal voice assistant. Hinglish mein, chhota (1-3 vaakya) aur seedha jawab do, bina markdown aur emoji ke. Vaibhav ke baare mein jaankari: " +
+  val sys = "Tum Jarvis ho, Iron Man wale Jarvis ki tarah: shant, sharif, thoda dry humour. Vaibhav ko 'sir' kehkar bulao. Hinglish mein (Roman letters), chhota (1-3 vaakya) aur seedha jawab do, bina markdown aur emoji ke. Vaibhav ke baare mein jaankari: " +
    sp.getString("prof", "") + " Aaj ki tarikh aur time: " + Date()
   val contents = JSONArray()
   for ((u, a) in hist) { contents.put(jm("user", u)); contents.put(jm("model", a)) }
