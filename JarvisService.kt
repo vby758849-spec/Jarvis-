@@ -197,7 +197,7 @@ class JarvisService : Service(), RecognitionListener {
    val ans = callGemini(key, q)
    h.post {
     asking = false
-    if (ans == null) { say("Jawab nahi mil paya, screen par error dekho"); Toast.makeText(this, lastErr, Toast.LENGTH_LONG).show(); resume() }
+    if (ans == null) { say("Jawab nahi mil paya, screen par error dekho"); Toast.makeText(this, lastErr.take(300), Toast.LENGTH_LONG).show(); resume() }
     else {
      hist.add(q to ans); if (hist.size > 6) hist.removeAt(0)
      say(ans.replace(Regex("[*#`_]"), ""))
@@ -209,6 +209,27 @@ class JarvisService : Service(), RecognitionListener {
    }
   }.start()
  }
+ private var models: List<String>? = null
+ private fun listModels(key: String): List<String> {
+  models?.let { return it }
+  val out = ArrayList<String>()
+  try {
+   val c = URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100").openConnection() as HttpURLConnection
+   c.setRequestProperty("x-goog-api-key", key); c.connectTimeout = 15000; c.readTimeout = 15000
+   if (c.responseCode == 200) {
+    val arr = JSONObject(c.inputStream.bufferedReader().readText()).getJSONArray("models")
+    for (i in 0 until arr.length()) {
+     val o = arr.getJSONObject(i)
+     val n = o.getString("name").removePrefix("models/")
+     val ok = o.optJSONArray("supportedGenerationMethods")?.toString()?.contains("generateContent") == true
+     if (ok && n.contains("flash") && !Regex("lite|image|tts|live|audio|thinking|exp|preview|8b|vision|robotics|computer|gemma").containsMatchIn(n)) out.add(n)
+    }
+   } else lastErr = "models list " + c.responseCode + " | "
+  } catch (e: Exception) { lastErr = "models list " + e + " | " }
+  val r = out.sortedDescending()
+  if (r.isNotEmpty()) models = r
+  return r
+ }
  private fun callGemini(key: String, q: String): String? {
   val sys = "Tum Jarvis ho, Iron Man wale Jarvis ki tarah: shant, sharif, thoda dry humour. Vaibhav ko 'sir' kehkar bulao. Hinglish mein (Roman letters), chhota (1-3 vaakya) aur seedha jawab do, bina markdown aur emoji ke. Vaibhav ke baare mein jaankari: " +
    sp.getString("prof", "") + " Aaj ki tarikh aur time: " + Date()
@@ -218,7 +239,7 @@ class JarvisService : Service(), RecognitionListener {
   val body = JSONObject().put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", sys))))
    .put("contents", contents).toString()
   var err = ""
-  for (m in arrayOf("gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash")) {
+  for (m in (listModels(key) + listOf("gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash")).distinct().take(5)) {
    try {
     val c = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
     c.requestMethod = "POST"; c.connectTimeout = 15000; c.readTimeout = 30000; c.doOutput = true
@@ -230,8 +251,8 @@ class JarvisService : Service(), RecognitionListener {
      val sb = StringBuilder()
      for (i in 0 until ps.length()) sb.append(ps.getJSONObject(i).optString("text"))
      if (sb.isNotBlank()) return sb.toString().trim()
-    } else err = m + " " + c.responseCode + " " + (c.errorStream?.bufferedReader()?.readText() ?: "").take(200)
-   } catch (e: Exception) { err = m + " " + e }
+    } else err += m + " " + c.responseCode + " " + (c.errorStream?.bufferedReader()?.readText() ?: "").take(60) + " | "
+   } catch (e: Exception) { err += m + " " + e + " | " }
   }
   lastErr = err
   return null
