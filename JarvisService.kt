@@ -20,9 +20,6 @@ import android.telephony.SmsManager
 import android.widget.Toast
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import ai.picovoice.porcupine.Porcupine
-import ai.picovoice.porcupine.PorcupineManager
-import ai.picovoice.porcupine.PorcupineManagerCallback
 import java.text.SimpleDateFormat
 import java.net.HttpURLConnection
 import java.net.URL
@@ -37,8 +34,6 @@ private var tts: TextToSpeech? = null
 private var ttsReady = false
 private val h = Handler(Looper.getMainLooper())
 private var awake = false
-private var porc: PorcupineManager? = null
-@Volatile private var asking = false
 @Volatile private var lastErr = ""
 private var lastMsg = ""
 private var lastAnn = ""
@@ -62,10 +57,16 @@ else -> app
 val g = if (group.isEmpty()) "" else hi(group) + " ग्रुप में "
 h.post {
 say("सर, " + hi(who) + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
-if (porc == null) { h.postDelayed({ awake = true }, 4000); h.postDelayed({ awake = false }, 20000) }
-else { awake = true; listen() }
+h.postDelayed({ awake = true }, 4000); h.postDelayed({ awake = false }, 20000)
 }
 }
+private val sp by lazy { getSharedPreferences("j", Context.MODE_PRIVATE) }
+private val hist = ArrayList<Pair<String, String>>()
+@Volatile private var speaking = false
+private val wake = Regex("jarvis|jarvish|travis|जार्विस|जारविस|जर्विस")
+private val LANG = "en-IN"
+override fun onBind(i: Intent?): IBinder? = null
+override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
@@ -91,12 +92,11 @@ am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 for (st in intArrayOf(AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM)) try { am.adjustStreamVolume(st, AudioManager.ADJUST_MUTE, 0) } catch (e: Exception) {}
 sr = SpeechRecognizer.createSpeechRecognizer(this)
 sr.setRecognitionListener(this)
-initWake()
+listen()
 }
 override fun onDestroy() {
 inst = null
 h.removeCallbacksAndMessages(null)
-try { porc?.stop(); porc?.delete() } catch (e: Exception) { }
 sr.destroy(); tts?.shutdown()
 beep(false)
 for (st in intArrayOf(AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM)) try { am.adjustStreamVolume(st, AudioManager.ADJUST_UNMUTE, 0) } catch (e: Exception) {}
@@ -125,11 +125,11 @@ try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 
 override fun onResults(b: Bundle?) {
 val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
 (l?.firstOrNull { wake.containsMatchIn(it.lowercase()) } ?: l?.firstOrNull())?.let { process(it.lowercase()) }
-if (porc == null) h.postDelayed({ listen() }, 400) else if (!asking) resume()
+h.postDelayed({ listen() }, 400)
 }
 override fun onError(e: Int) {
 sr.cancel()
-if (porc == null) h.postDelayed({ listen() }, if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 400) else resume()
+h.postDelayed({ listen() }, if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 400)
 }
 override fun onReadyForSpeech(p: Bundle?) {}
 override fun onBeginningOfSpeech() {}
@@ -184,33 +184,6 @@ Regex("\\b(open|kholo|khol)\\b").containsMatchIn(s) -> openApp(s)
 else -> ask(s0)
 }
 }
-private fun initWake() {
-val k = sp.getString("pico", "")?.trim().orEmpty()
-if (k.isNotEmpty()) {
-try {
-porc = PorcupineManager.Builder().setAccessKey(k).setKeyword(Porcupine.BuiltInKeyword.JARVIS)
-.setSensitivity(0.7f).build(this, PorcupineManagerCallback { h.post { onWake() } })
-porc?.start()
-return
-} catch (e: Exception) {
-porc = null
-say("Picovoice key चेक करो, पुराने तरीके से चला रहा हूँ")
-}
-}
-listen()
-}
-private fun onWake() {
-try { porc?.stop() } catch (e: Exception) { }
-awake = true
-say("जी भाई?")
-listen()
-}
-private fun resume() {
-awake = false
-if (porc == null) { listen(); return }
-if (speaking) { h.postDelayed({ resume() }, 700); return }
-try { porc?.start() } catch (e: Exception) { h.postDelayed({ resume() }, 1500) }
-}
 private fun applyVoice() {
 tts?.setPitch(sp.getFloat("pt", 0.65f)); tts?.setSpeechRate(0.95f)
 val pref = Regex("hic|hid")
@@ -228,19 +201,15 @@ private fun jm(r: String, t: String) = JSONObject().put("role", r).put("parts", 
 private fun ask(q: String) {
 val key = sp.getString("key", "")?.trim().orEmpty()
 if (key.isEmpty()) { say("पहले ऐप में Gemini API key डालो"); return }
-asking = true
 Thread {
 val ans = callGemini(key, q)
 h.post {
-asking = false
-if (ans == null) { say("जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, lastErr.take(300), Toast.LENGTH_LONG).show(); resume() }
+if (ans == null) { say("जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, lastErr.take(300), Toast.LENGTH_LONG).show() }
 else {
 hist.add(q to ans); if (hist.size > 6) hist.removeAt(0)
 say(ans.replace(Regex("[*#`_]"), ""))
-if (porc == null) {
 h.postDelayed({ awake = true }, 2500)
 h.postDelayed({ awake = false }, 25000)
-} else { awake = true; listen() }
 }
 }
 }.start()
