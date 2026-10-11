@@ -34,7 +34,8 @@ private var tts: TextToSpeech? = null
 private var ttsReady = false
 private val h = Handler(Looper.getMainLooper())
 private var awake = false
-@Volatile private var lastErr = ""
+private var tk = 0
+private fun stayAwake(ms: Long) { awake = true; val t = ++tk; h.postDelayed({ if (t == tk) awake = false }, ms) }
 private var lastMsg = ""
 private var lastAnn = ""
 companion object { @Volatile var inst: JarvisService? = null }
@@ -57,14 +58,14 @@ else -> app
 val g = if (group.isEmpty()) "" else hi(group) + " ग्रुप में "
 h.post {
 say("सर, " + hi(who) + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
-h.postDelayed({ awake = true }, 4000); h.postDelayed({ awake = false }, 20000)
+h.postDelayed({ stayAwake(20000) }, 4000)
 }
 }
 private val sp by lazy { getSharedPreferences("j", Context.MODE_PRIVATE) }
 private val hist = ArrayList<Pair<String, String>>()
 @Volatile private var speaking = false
-private val wake = Regex("jarvis|jarvish|travis|जार्विस|जारविस|जर्विस")
-private val LANG = "en-IN"
+private val wake = Regex("jarvis|jarvish|travis|jar vis|jarwis|darvis|charvis|harvis|service|जार्विस|जारविस|जर्विस|जार्वीस|जारवीस|जरविस|ज़ार्विस|डार्विस|चार्विस|जार्विश")
+private val LANG = "hi-IN"
 override fun onBind(i: Intent?): IBinder? = null
 override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
@@ -111,25 +112,25 @@ private fun beep(m: Boolean) {
 try { am.adjustStreamVolume(AudioManager.STREAM_MUSIC, if (m) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE, 0) } catch (e: Exception) {}
 }
 private fun listen() {
-if (speaking) { h.postDelayed({ listen() }, 700); return }
+if (speaking) { h.postDelayed({ listen() }, 300); return }
 val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, LANG)
 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 8000L)
-.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 6000L)
+.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
 beep(true)
-h.postDelayed({ beep(false) }, 900)
-try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 1000) }
+h.postDelayed({ beep(false) }, 600)
+try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 500) }
 }
 override fun onResults(b: Bundle?) {
 val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
 (l?.firstOrNull { wake.containsMatchIn(it.lowercase()) } ?: l?.firstOrNull())?.let { process(it.lowercase()) }
-h.postDelayed({ listen() }, 400)
+h.postDelayed({ listen() }, 150)
 }
 override fun onError(e: Int) {
 sr.cancel()
-h.postDelayed({ listen() }, if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 400)
+h.postDelayed({ listen() }, if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 150)
 }
 override fun onReadyForSpeech(p: Bundle?) {}
 override fun onBeginningOfSpeech() {}
@@ -142,50 +143,34 @@ private fun process(s: String) {
 val m = wake.find(s)
 if (m != null) {
 val rest = s.substring(m.range.last + 1).trim()
-if (rest.isNotEmpty()) { awake = false; handle(rest) }
-else {
-say("जी, बोलिए")
-h.postDelayed({ awake = true }, 1500)
-h.postDelayed({ awake = false }, 20000)
+if (rest.isNotEmpty()) { stayAwake(20000); handle(rest) }
+else { say("जी भाई?"); h.postDelayed({ stayAwake(20000) }, 1500) }
+} else if (awake) { stayAwake(20000); handle(s) }
 }
-} else if (awake) { awake = false; handle(s) }
-}
-private fun handle(s0: String) {
-val s = s0.replace("whats app", "whatsapp").replace("you tube", "youtube")
+private fun handle(s: String) {
 when {
-Regex("kis ?ne (banaya|bnaya|banaaya|create)|who (made|created|built) you").containsMatchIn(s) -> say("मुझे वैभव सर ने बनाया है")
-lastMsg.isNotEmpty() && Regex("^(haan|han|ha|yes|yeah|ji|padho|bolo|sunao)\\b").containsMatchIn(s) -> say(lastMsg)
-Regex("(message|msg|massage) ?(kya|padh|sunao)|kya (likha|message|msg)|padh ?do|padh ?ke sunao|read (the )?message").containsMatchIn(s) -> say(if (lastMsg.isEmpty()) "कोई नया मैसेज नहीं है" else lastMsg)
-Regex("(awaaz|awaz|voice).*(bhari|bhaari|gehri|deep|heavy)|(bhari|bhaari|gehri|deep|heavy).*(awaaz|awaz|voice)").containsMatchIn(s) -> {
+Regex("kis ?ne (banaya|bnaya|banaaya|create)|किसने (तुम्हें |तुम्हे |तुमको )?बनाया|who (made|created|built) you").containsMatchIn(s) -> say("मुझे वैभव सर ने बनाया है")
+lastMsg.isNotEmpty() && (Regex("^(haan|han|yes|yeah|ji|padho|bolo|sunao)\\b").containsMatchIn(s) || Regex("^(हाँ|हां|पढ़ो|पढ़ दो|सुनाओ|बोलो)").containsMatchIn(s)) -> say(lastMsg)
+Regex("(message|msg|massage) ?(kya|padh|sunao)|kya (likha|message|msg)|padh ?do|padh ?ke sunao|read (the )?message|मैसेज (क्या|पढ़|सुना)|क्या (लिखा|मैसेज)|पढ़ के सुनाओ").containsMatchIn(s) -> say(if (lastMsg.isEmpty()) "कोई नया मैसेज नहीं है" else lastMsg)
+Regex("(awaaz|awaz|voice|आवाज़|आवाज).*(bhari|bhaari|gehri|deep|heavy|भारी|गहरी)|(bhari|bhaari|gehri|deep|heavy|भारी|गहरी).*(awaaz|awaz|voice|आवाज़|आवाज)").containsMatchIn(s) -> {
 sp.edit().putFloat("pt", maxOf(0.4f, sp.getFloat("pt", 0.65f) - 0.1f)).apply(); applyVoice()
 say("अब आवाज़ और भारी है")
 }
-Regex("(awaaz|awaz|voice).*(patli|halki|light)|(patli|halki|light).*(awaaz|awaz|voice)").containsMatchIn(s) -> {
+Regex("(awaaz|awaz|voice|आवाज़|आवाज).*(patli|halki|light|पतली|हल्की)|(patli|halki|light|पतली|हल्की).*(awaaz|awaz|voice|आवाज़|आवाज)").containsMatchIn(s) -> {
 sp.edit().putFloat("pt", minOf(1.2f, sp.getFloat("pt", 0.65f) + 0.1f)).apply(); applyVoice()
 say("अब आवाज़ हल्की है")
 }
-Regex("awaaz badlo|awaz badlo|voice change|change voice").containsMatchIn(s) -> {
+Regex("awaaz badlo|awaz badlo|voice change|change voice|आवाज़ बदल|आवाज बदल").containsMatchIn(s) -> {
 sp.edit().putInt("vk", sp.getInt("vk", 0) + 1).apply(); applyVoice()
 say("ये मेरी नई आवाज़ है, पसंद आई?")
 }
-Regex("^(yaad rakh|yaad rakho|remember)").containsMatchIn(s) -> remember(s)
-"torch" in s || "flashlight" in s -> torch(!Regex("\\b(off|band|bandh)\\b").containsMatchIn(s))
-Regex("\\bcall\\b").containsMatchIn(s) -> call(s)
-"alarm" in s -> alarm(s)
-Regex("message|sms|msg|whatsapp").containsMatchIn(s) -> msg(s)
-"youtube" in s -> youtube(s)
-"maps" in s || "raasta" in s || "navigate" in s -> {
-val q = s.replace(Regex("\\b(maps|raasta|navigate|to|kholo|dikhao)\\b"), "").trim()
-say("$q का रास्ता"); go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q))))
-}
-Regex("\\b(time|samay)\\b|baje kya").containsMatchIn(s) ->
-say("अभी " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()) + " हुए हैं")
-Regex("\\b(open|kholo|khol)\\b").containsMatchIn(s) -> openApp(s)
-else -> ask(s0)
+Regex("^(yaad rakh|yaad rakho|remember)|^याद रख").containsMatchIn(s) -> remember(s)
+Regex("torch|flashlight|टॉर्च|टोर्च|फ्लैशलाइट").containsMatchIn(s) -> torch(!Regex("\\b(off|band|bandh)\\b|बंद|बन्द|ऑफ").containsMatchIn(s))
+else -> ask(s)
 }
 }
 private fun applyVoice() {
-tts?.setPitch(sp.getFloat("pt", 0.65f)); tts?.setSpeechRate(0.95f)
+tts?.setPitch(sp.getFloat("pt", 0.65f)); tts?.setSpeechRate(1.05f)
 val pref = Regex("hic|hid")
 val v = (tts?.voices ?: emptySet<android.speech.tts.Voice>())
 .filter { it.locale.language == "hi" }
@@ -193,74 +178,46 @@ val v = (tts?.voices ?: emptySet<android.speech.tts.Voice>())
 if (v.isNotEmpty()) tts?.voice = v[sp.getInt("vk", 0) % v.size]
 }
 private fun remember(s: String) {
-val fact = s.replace(Regex("^(yaad rakh|yaad rakho|remember)( ki| that)?"), "").trim()
+val fact = s.replace(Regex("^(yaad rakh|yaad rakho|remember|याद रख|याद रखो)( ki| that| कि)?"), "").trim()
 sp.edit().putString("prof", sp.getString("prof", "") + " " + fact + ".").apply()
 say("याद रख लिया")
 }
-private fun jm(r: String, t: String) = JSONObject().put("role", r).put("parts", JSONArray().put(JSONObject().put("text", t)))
 private fun ask(q: String) {
 val key = sp.getString("key", "")?.trim().orEmpty()
 if (key.isEmpty()) { say("पहले ऐप में Gemini API key डालो"); return }
+val hh = ArrayList(hist)
 Thread {
-val ans = callGemini(key, q)
+val sys = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko bhai bulao. say hamesha Devanagari Hindi mein (English shabd English mein), 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """ + sp.getString("prof", "") + " Abhi: " + Date()
+val raw = Gemini.call(key, sys, hh, q)
 h.post {
-if (ans == null) { say("जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, lastErr.take(300), Toast.LENGTH_LONG).show() }
+if (raw == null) { say("जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() }
 else {
-hist.add(q to ans); if (hist.size > 6) hist.removeAt(0)
-say(ans.replace(Regex("[*#`_]"), ""))
-h.postDelayed({ awake = true }, 2500)
-h.postDelayed({ awake = false }, 25000)
+var jj: JSONObject? = null
+try { jj = JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { }
+val j = jj
+val sy = (j?.optString("say") ?: raw).replace(Regex("[*#`_]"), "")
+hist.add(q to sy); if (hist.size > 6) hist.removeAt(0)
+val a = j?.optString("action") ?: "none"
+if (j == null || a == "none" || a.isEmpty()) say(sy) else act(a, j)
 }
+stayAwake(20000)
 }
 }.start()
 }
-private var models: List<String>? = null
-private fun listModels(key: String): List<String> {
-models?.let { return it }
-val out = ArrayList<String>()
-try {
-val c = URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100").openConnection() as HttpURLConnection
-c.setRequestProperty("x-goog-api-key", key); c.connectTimeout = 15000; c.readTimeout = 15000
-if (c.responseCode == 200) {
-val arr = JSONObject(c.inputStream.bufferedReader().readText()).getJSONArray("models")
-for (i in 0 until arr.length()) {
-val o = arr.getJSONObject(i)
-val n = o.getString("name").removePrefix("models/")
-val ok = o.optJSONArray("supportedGenerationMethods")?.toString()?.contains("generateContent") == true
-if (ok && n.contains("flash") && !Regex("lite|image|tts|live|audio|thinking|exp|preview|8b|vision|robotics|computer|gemma").containsMatchIn(n)) out.add(n)
+private fun act(a: String, j: JSONObject) {
+val who = j.optString("number").ifEmpty { j.optString("name") }
+val tx = j.optString("text")
+when (a) {
+"call" -> call("call $who")
+"sms" -> if (tx.isEmpty()) say("क्या मैसेज भेजना है?") else msg("sms $who ko $tx")
+"whatsapp" -> msg("whatsapp $who ko $tx")
+"youtube" -> youtube("youtube " + j.optString("query"))
+"maps" -> { val q = j.optString("query"); say(q + " का रास्ता"); go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)))) }
+"alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")))
+"torch" -> torch(j.optBoolean("on", true))
+"openapp" -> openApp("open " + j.optString("app").lowercase())
+else -> say(j.optString("say"))
 }
-} else lastErr = "models list " + c.responseCode + " | "
-} catch (e: Exception) { lastErr = "models list " + e + " | " }
-val r = out.sortedDescending()
-if (r.isNotEmpty()) models = r
-return r
-}
-private fun callGemini(key: String, q: String): String? {
-val sys = "Tum Jarvis ho, Vaibhav ke dost aur voice assistant. Vaibhav ne tumhe banaya hai. Koi pooche tumhe kisne banaya to bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko bhai bulao. Jawab hamesha Devanagari Hindi mein likho (English shabd English mein chalenge), 1-3 chhote vaakya, bina markdown aur emoji ke. Google ya Gemini ka naam mat lo. Vaibhav ke baare mein jaankari: " +
-sp.getString("prof", "") + " Aaj ki tarikh aur time: " + Date()
-val contents = JSONArray()
-for ((u, a) in hist) { contents.put(jm("user", u)); contents.put(jm("model", a)) }
-contents.put(jm("user", q))
-val body = JSONObject().put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", sys))))
-.put("contents", contents).toString()
-var err = ""
-for (m in (listModels(key) + listOf("gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash")).distinct().take(5)) {
-try {
-val c = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent").openConnection() as HttpURLConnection
-c.requestMethod = "POST"; c.connectTimeout = 15000; c.readTimeout = 30000; c.doOutput = true
-c.setRequestProperty("Content-Type", "application/json"); c.setRequestProperty("x-goog-api-key", key)
-c.outputStream.use { it.write(body.toByteArray()) }
-if (c.responseCode == 200) {
-val ps = JSONObject(c.inputStream.bufferedReader().readText()).getJSONArray("candidates")
-.getJSONObject(0).getJSONObject("content").getJSONArray("parts")
-val sb = StringBuilder()
-for (i in 0 until ps.length()) sb.append(ps.getJSONObject(i).optString("text"))
-if (sb.isNotBlank()) return sb.toString().trim()
-} else err += m + " " + c.responseCode + " " + (c.errorStream?.bufferedReader()?.readText() ?: "").take(60) + " | "
-} catch (e: Exception) { err += m + " " + e + " | " }
-}
-lastErr = err
-return null
 }
 private fun go(i: Intent): Boolean = try {
 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
@@ -290,6 +247,7 @@ if (d != null) { name = d; body = t.replace(Regex("\\+?\\d[\\d ]{6,}\\d"), "").r
 else {
 val k = t.indexOf(" ko ")
 if (k > 0) { name = t.substring(0, k).trim(); body = t.substring(k + 4).trim() }
+else if (t.endsWith(" ko")) { name = t.removeSuffix(" ko"); body = "" }
 else { val p = t.split(" ", limit = 2); name = p[0]; body = p.getOrElse(1) { "" } }
 }
 val num = d ?: findNumber(name)
@@ -344,30 +302,5 @@ val id = cm.cameraIdList.first { cm.getCameraCharacteristics(it).get(CameraChara
 cm.setTorchMode(id, on)
 say(if (on) "टॉर्च ऑन" else "टॉर्च ऑफ")
 } catch (e: Exception) { say("टॉर्च नहीं चली") }
-}
-}
-class MsgListener : NotificationListenerService() {
-override fun onNotificationPosted(sbn: StatusBarNotification) {
-val j = JarvisService.inst
-if (j == null) return
-val n = sbn.notification
-if (sbn.packageName == packageName) return
-if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
-if ((n.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
-val known = sbn.packageName in setOf("com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "com.google.android.apps.messaging", "com.android.mms", "com.samsung.android.messaging", "com.instagram.android", "com.facebook.orca", "com.google.android.gm")
-if (!known && n.category != Notification.CATEGORY_MESSAGE && n.category != Notification.CATEGORY_EMAIL) return
-val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
-var text = (n.extras.getCharSequence(Notification.EXTRA_TEXT) ?: "").toString().take(200)
-var who = title
-var group = ""
-val lb = n.extras.getParcelableArray(Notification.EXTRA_MESSAGES)?.lastOrNull() as? android.os.Bundle
-if (lb != null) {
-val sd = lb.getCharSequence("sender")?.toString()
-val tx = lb.getCharSequence("text")?.toString()
-if (!tx.isNullOrEmpty()) text = tx.take(200)
-if (!sd.isNullOrEmpty() && sd != title) { who = sd; group = title }
-}
-val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }
-j.announce(who, app, text, group)
 }
 }
