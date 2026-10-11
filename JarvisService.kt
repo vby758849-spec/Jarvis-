@@ -43,21 +43,29 @@ private var porc: PorcupineManager? = null
 private var lastMsg = ""
 private var lastAnn = ""
 companion object { @Volatile var inst: JarvisService? = null }
-fun announce(who: String, app: String, text: String) {
+private fun hi(t: String): String = try {
+if (Build.VERSION.SDK_INT >= 29 && t.any { it in 'A'..'z' }) android.icu.text.Transliterator.getInstance("Latin-Devanagari").transliterate(t) else t
+} catch (e: Exception) { t }
+fun announce(who: String, app: String, text: String, group: String) {
 val key = who + text
 if (key == lastAnn) return
 lastAnn = key
 lastMsg = who + " ने कहा: " + text
 h.postDelayed({ lastAnn = "" }, 10000)
-h.post { say("सर, " + app + " पर " + who + " का मैसेज आया है") }
+val ap = when {
+app.contains("whats", true) -> "व्हाट्सऐप"
+app.contains("telegram", true) -> "टेलीग्राम"
+app.contains("gmail", true) -> "जीमेल"
+app.contains("messag", true) || app.contains("sms", true) -> "मैसेज"
+else -> app
 }
-private val sp by lazy { getSharedPreferences("j", Context.MODE_PRIVATE) }
-private val hist = ArrayList<Pair<String, String>>()
-@Volatile private var speaking = false
-private val wake = Regex("jarvis|jarvish|travis|जार्विस|जारविस|जर्विस")
-private val LANG = "en-IN" // Hindi ke liye "hi-IN" kar sakte ho
-override fun onBind(i: Intent?): IBinder? = null
-override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
+val g = if (group.isEmpty()) "" else hi(group) + " ग्रुप में "
+h.post {
+say("सर, " + hi(who) + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
+if (porc == null) { h.postDelayed({ awake = true }, 4000); h.postDelayed({ awake = false }, 20000) }
+else { awake = true; listen() }
+}
+}
 override fun onCreate() {
 super.onCreate()
 inst = this
@@ -146,7 +154,8 @@ private fun handle(s0: String) {
 val s = s0.replace("whats app", "whatsapp").replace("you tube", "youtube")
 when {
 Regex("kis ?ne (banaya|bnaya|banaaya|create)|who (made|created|built) you").containsMatchIn(s) -> say("मुझे वैभव सर ने बनाया है")
-Regex("(message|msg) padh|padh ?do|read (the )?message").containsMatchIn(s) -> say(if (lastMsg.isEmpty()) "कोई नया मैसेज नहीं है" else lastMsg)
+lastMsg.isNotEmpty() && Regex("^(haan|han|ha|yes|yeah|ji|padho|bolo|sunao)\\b").containsMatchIn(s) -> say(lastMsg)
+Regex("(message|msg|massage) ?(kya|padh|sunao)|kya (likha|message|msg)|padh ?do|padh ?ke sunao|read (the )?message").containsMatchIn(s) -> say(if (lastMsg.isEmpty()) "कोई नया मैसेज नहीं है" else lastMsg)
 Regex("(awaaz|awaz|voice).*(bhari|bhaari|gehri|deep|heavy)|(bhari|bhaari|gehri|deep|heavy).*(awaaz|awaz|voice)").containsMatchIn(s) -> {
 sp.edit().putFloat("pt", maxOf(0.4f, sp.getFloat("pt", 0.65f) - 0.1f)).apply(); applyVoice()
 say("अब आवाज़ और भारी है")
@@ -370,16 +379,26 @@ say(if (on) "टॉर्च ऑन" else "टॉर्च ऑफ")
 }
 class MsgListener : NotificationListenerService() {
 override fun onNotificationPosted(sbn: StatusBarNotification) {
-val j = JarvisService.inst ?: return
+val j = JarvisService.inst
+if (j == null) return
 val n = sbn.notification
 if (sbn.packageName == packageName) return
 if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
 if ((n.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
 val known = sbn.packageName in setOf("com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "com.google.android.apps.messaging", "com.android.mms", "com.samsung.android.messaging", "com.instagram.android", "com.facebook.orca", "com.google.android.gm")
 if (!known && n.category != Notification.CATEGORY_MESSAGE && n.category != Notification.CATEGORY_EMAIL) return
-val who = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
-val text = (n.extras.getCharSequence(Notification.EXTRA_TEXT) ?: "").toString().take(200)
+val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
+var text = (n.extras.getCharSequence(Notification.EXTRA_TEXT) ?: "").toString().take(200)
+var who = title
+var group = ""
+val lb = n.extras.getParcelableArray(Notification.EXTRA_MESSAGES)?.lastOrNull() as? android.os.Bundle
+if (lb != null) {
+val sd = lb.getCharSequence("sender")?.toString()
+val tx = lb.getCharSequence("text")?.toString()
+if (!tx.isNullOrEmpty()) text = tx.take(200)
+if (!sd.isNullOrEmpty() && sd != title) { who = sd; group = title }
+}
 val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }
-j.announce(who, app, text)
+j.announce(who, app, text, group)
 }
 }
