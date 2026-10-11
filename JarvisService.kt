@@ -18,6 +18,8 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.telephony.SmsManager
 import android.widget.Toast
+import android.service.notification.NotificationListenerService
+import android.service.notification.StatusBarNotification
 import ai.picovoice.porcupine.Porcupine
 import ai.picovoice.porcupine.PorcupineManager
 import ai.picovoice.porcupine.PorcupineManagerCallback
@@ -38,6 +40,17 @@ class JarvisService : Service(), RecognitionListener {
  private var porc: PorcupineManager? = null
  @Volatile private var asking = false
  @Volatile private var lastErr = ""
+ private var lastMsg = ""
+ private var lastAnn = ""
+ companion object { @Volatile var inst: JarvisService? = null }
+ fun announce(who: String, app: String, text: String) {
+  val key = who + text
+  if (key == lastAnn) return
+  lastAnn = key
+  lastMsg = who + " ने कहा: " + text
+  h.postDelayed({ lastAnn = "" }, 10000)
+  h.post { say("सर, " + app + " पर " + who + " का मैसेज आया है") }
+ }
  private val sp by lazy { getSharedPreferences("j", Context.MODE_PRIVATE) }
  private val hist = ArrayList<Pair<String, String>>()
  @Volatile private var speaking = false
@@ -47,6 +60,7 @@ class JarvisService : Service(), RecognitionListener {
  override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
  override fun onCreate() {
   super.onCreate()
+  inst = this
   getSystemService(NotificationManager::class.java)
    .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
   val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai")
@@ -72,6 +86,7 @@ class JarvisService : Service(), RecognitionListener {
   initWake()
  }
  override fun onDestroy() {
+  inst = null
   h.removeCallbacksAndMessages(null)
   try { porc?.stop(); porc?.delete() } catch (e: Exception) { }
   sr.destroy(); tts?.shutdown()
@@ -131,6 +146,7 @@ class JarvisService : Service(), RecognitionListener {
   val s = s0.replace("whats app", "whatsapp").replace("you tube", "youtube")
   when {
    Regex("kis ?ne (banaya|bnaya|banaaya|create)|who (made|created|built) you").containsMatchIn(s) -> say("मुझे वैभव सर ने बनाया है")
+   Regex("(message|msg) padh|padh ?do|read (the )?message").containsMatchIn(s) -> say(if (lastMsg.isEmpty()) "कोई नया मैसेज नहीं है" else lastMsg)
    Regex("awaaz badlo|awaz badlo|voice change|change voice").containsMatchIn(s) -> {
     sp.edit().putInt("vk", sp.getInt("vk", 0) + 1).apply(); applyVoice()
     say("ये मेरी नई आवाज़ है, पसंद आई?")
@@ -342,5 +358,18 @@ class JarvisService : Service(), RecognitionListener {
    cm.setTorchMode(id, on)
    say(if (on) "टॉर्च ऑन" else "टॉर्च ऑफ")
   } catch (e: Exception) { say("टॉर्च नहीं चली") }
+ }
+}
+class MsgListener : NotificationListenerService() {
+ override fun onNotificationPosted(sbn: StatusBarNotification) {
+  val j = JarvisService.inst ?: return
+  val n = sbn.notification
+  if (sbn.packageName == packageName) return
+  if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
+  if (n.category != Notification.CATEGORY_MESSAGE && n.category != Notification.CATEGORY_EMAIL) return
+  val who = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
+  val text = (n.extras.getCharSequence(Notification.EXTRA_TEXT) ?: "").toString().take(200)
+  val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }
+  j.announce(who, app, text)
  }
 }
