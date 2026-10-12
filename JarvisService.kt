@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
-import android.media.AudioManager
 import android.net.Uri
 import android.os.*
 import android.provider.AlarmClock
@@ -22,12 +21,7 @@ import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.SpeechService
 import org.vosk.android.StorageService
-import android.service.notification.NotificationListenerService
-import android.service.notification.StatusBarNotification
 import java.text.SimpleDateFormat
-import java.net.HttpURLConnection
-import java.net.URL
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Date
 import java.util.Locale
@@ -41,7 +35,14 @@ private var tk = 0
 private fun stayAwake(ms: Long) { awake = true; val t = ++tk; h.postDelayed({ if (t == tk) awake = false }, ms) }
 private var lastMsg = ""
 private var lastAnn = ""
-companion object { @Volatile var inst: JarvisService? = null; @Volatile var sendAt = 0L }
+companion object {
+@Volatile var inst: JarvisService? = null
+@Volatile var sendAt = 0L
+@Volatile var igText = ""
+@Volatile var igAt = 0L
+val logs = java.util.concurrent.ConcurrentLinkedDeque<String>()
+fun lg(t: String) { logs.addLast(t.take(170)); while (logs.size > 14) logs.pollFirst() }
+}
 private fun hi(t: String): String = try {
 if (Build.VERSION.SDK_INT >= 29 && t.any { it in 'A'..'z' }) android.icu.text.Transliterator.getInstance("Latin-Devanagari").transliterate(t) else t
 } catch (e: Exception) { t }
@@ -110,36 +111,39 @@ tts?.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u")
 }
 private var vModel: Model? = null
 private var vSvc: SpeechService? = null
+private var vErr = 0
 private fun initWake() {
 StorageService.unpack(this, "model-en", "model",
-StorageService.Callback<Model> { m -> h.post { vModel = m; startWake() } },
+StorageService.Callback<Model> { m -> h.post { lg("Vosk model taiyar"); vModel = m; startWake() } },
 StorageService.Callback<java.io.IOException> { e -> h.post { Toast.makeText(this, "Offline wake fail: " + e.message, Toast.LENGTH_LONG).show(); listen() } })
 }
 private fun startWake() {
 val m = vModel ?: run { listen(); return }
 try {
 vSvc?.shutdown()
-val r = Recognizer(m, 16000.0f, "[\"jarvis\", \"travis\", \"service\", \"harvest\", \"[unk]\"]")
+val r = Recognizer(m, 16000.0f, "[\"jarvis\", \"travis\", \"[unk]\"]")
 val sv = SpeechService(r, 16000.0f)
 vSvc = sv
+lg("Vosk sun raha hai")
 sv.startListening(object : org.vosk.android.RecognitionListener {
-override fun onPartialResult(p: String?) { chk(p) }
+override fun onPartialResult(p: String?) { }
 override fun onResult(p: String?) { chk(p) }
 override fun onFinalResult(p: String?) { }
-override fun onError(e: Exception?) { h.post { vSvc = null; listen() } }
+override fun onError(e: Exception?) { h.post { lg("Vosk error: " + e?.message); vSvc = null; vErr++; Toast.makeText(this@JarvisService, "Vosk error: " + e?.message, Toast.LENGTH_LONG).show(); if (vErr >= 3) vModel = null; h.postDelayed({ next() }, 1500) } }
 override fun onTimeout() { }
 })
-} catch (e: Exception) { vModel = null; listen() }
+} catch (e: Exception) { Toast.makeText(this, "Wake start fail: " + e, Toast.LENGTH_LONG).show(); vModel = null; listen() }
 }
 private fun chk(j: String?) {
-if (j != null && Regex("jarvis|travis|service|harvest").containsMatchIn(j.lowercase())) h.post { wakeHit(false) }
+if (j != null && Regex("jarvis|travis").containsMatchIn(j.lowercase())) h.post { wakeHit(false) }
 }
 private fun wakeHit(quiet: Boolean) {
 val sv = vSvc ?: return
 vSvc = null
+lg("wake: Jarvis suna")
 try { sv.stop(); sv.shutdown() } catch (e: Exception) { }
 stayAwake(20000)
-if (!quiet) say("जी भाई?")
+if (!quiet) say("जी बॉस?")
 listen()
 }
 private fun next() {
@@ -162,7 +166,9 @@ val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
 next()
 }
 override fun onError(e: Int) {
+lg("SR error " + e)
 sr.cancel()
+if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) { awake = false; tk++ }
 if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) h.postDelayed({ listen() }, 1500) else next()
 }
 override fun onReadyForSpeech(p: Bundle?) {}
@@ -173,12 +179,13 @@ override fun onEndOfSpeech() {}
 override fun onPartialResults(p: Bundle?) {}
 override fun onEvent(t: Int, p: Bundle?) {}
 private fun process(s: String) {
+lg("सुना: " + s)
 val m = wake.find(s)
 if (m != null) {
 val rest = s.substring(m.range.last + 1).trim()
-if (rest.isNotEmpty()) { stayAwake(20000); handle(rest) }
-else { say("जी भाई?"); h.postDelayed({ stayAwake(20000) }, 1500) }
-} else if (awake) { stayAwake(20000); handle(s) }
+if (rest.isNotEmpty()) handle(rest)
+else { say("जी बॉस?"); h.postDelayed({ stayAwake(20000) }, 1500) }
+} else if (awake) { awake = false; tk++; handle(s) }
 }
 private fun handle(s: String) {
 when {
@@ -221,11 +228,12 @@ val key = sp.getString("key", "")?.trim().orEmpty()
 if (key.isEmpty()) { say("पहले ऐप में Gemini API key डालो"); return }
 val hh = ArrayList(hist)
 Thread {
-val sys = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko bhai bulao. say hamesha Devanagari Hindi mein (English shabd English mein), 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """ + sp.getString("prof", "") + " Abhi: " + Date()
+val sys = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein), 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """ + sp.getString("prof", "") + " Abhi: " + Date()
 val raw = Gemini.call(key, sys, hh, q)
 h.post {
-if (raw == null) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() }
+if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() }
 else {
+lg("Gemini: " + raw)
 var jj: JSONObject? = null
 try { jj = JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { }
 val j = jj
@@ -234,17 +242,28 @@ hist.add(q to sy); if (hist.size > 6) hist.removeAt(0)
 val a = j?.optString("action") ?: "none"
 if (j == null || a == "none" || a.isEmpty()) say(sy) else act(a, j)
 }
-stayAwake(20000)
 }
 }.start()
 }
 private fun act(a: String, j: JSONObject) {
+lg("action: " + a + " " + j.optString("name") + j.optString("number") + j.optString("query") + j.optString("app"))
 val who = j.optString("number").ifEmpty { j.optString("name") }
 val tx = j.optString("text")
 when (a) {
 "call" -> call("call $who")
 "sms" -> if (tx.isEmpty()) say("क्या मैसेज भेजना है?") else msg("sms $who ko $tx")
 "whatsapp" -> msg("whatsapp $who ko $tx")
+"instagram" -> {
+val u = j.optString("username").trim().removePrefix("@")
+if (u.isEmpty() || tx.isEmpty()) say("किसे और क्या मैसेज भेजना है?")
+else {
+igText = tx; igAt = System.currentTimeMillis()
+say("$u को Instagram पर भेज रहा हूँ: $tx")
+val url = "https://ig.me/m/" + Uri.encode(u)
+try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.instagram.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+}
+}
 "youtube" -> youtube("youtube " + j.optString("query"))
 "maps" -> { val q = j.optString("query"); say(q + " का रास्ता"); go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)))) }
 "alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")))
