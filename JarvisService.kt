@@ -69,7 +69,7 @@ private val sp by lazy { getSharedPreferences("j", Context.MODE_PRIVATE) }
 private val hist = ArrayList<Pair<String, String>>()
 @Volatile private var speaking = false
 private val wake = Regex("jarvis|jarvish|travis|jar vis|jarwis|darvis|charvis|harvis|service|जार्विस|जारविस|जर्विस|जार्वीस|जारवीस|जरविस|ज़ार्विस|डार्विस|चार्विस|जार्विश")
-private val LANG = "hi-IN"
+private var LANG = "hi-IN"
 override fun onBind(i: Intent?): IBinder? = null
 override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
@@ -144,7 +144,7 @@ lg("wake: Jarvis suna")
 try { sv.stop(); sv.shutdown() } catch (e: Exception) { }
 stayAwake(20000)
 if (!quiet) say("जी बॉस?")
-listen()
+h.postDelayed({ listen() }, 300)
 }
 private fun next() {
 if (vModel != null && !awake) startWake() else h.postDelayed({ listen() }, 150)
@@ -155,7 +155,6 @@ val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, LANG)
 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
 try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 500) }
@@ -168,8 +167,9 @@ next()
 override fun onError(e: Int) {
 lg("SR error " + e)
 sr.cancel()
-if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) { awake = false; tk++ }
-if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) h.postDelayed({ listen() }, 1500) else next()
+if (e == 12 || e == 13) LANG = "en-IN"
+awake = false; tk++
+h.postDelayed({ next() }, 600)
 }
 override fun onReadyForSpeech(p: Bundle?) {}
 override fun onBeginningOfSpeech() {}
