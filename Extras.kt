@@ -87,8 +87,10 @@ j.announce(who, app, text, group)
 }
 class SendAcc : AccessibilityService() {
 override fun onAccessibilityEvent(e: AccessibilityEvent?) {
-if (System.currentTimeMillis() - JarvisService.sendAt > 20000) return
 val root = rootInActiveWindow ?: return
+val now = System.currentTimeMillis()
+if (JarvisService.igText.isNotEmpty() && now - JarvisService.igAt < 25000 && e?.packageName?.toString() == "com.instagram.android") { ig(root); return }
+if (now - JarvisService.sendAt > 20000) return
 var n: AccessibilityNodeInfo? = null
 for (id in arrayOf("com.whatsapp:id/send", "com.whatsapp.w4b:id/send")) {
 n = root.findAccessibilityNodeInfosByViewId(id).firstOrNull()
@@ -97,6 +99,24 @@ if (n != null) break
 if (n == null) n = root.findAccessibilityNodeInfosByText("Send").firstOrNull { it.isClickable }
 ?: root.findAccessibilityNodeInfosByText("भेजें").firstOrNull { it.isClickable }
 if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.sendAt = 0L }
+}
+private fun ig(root: AccessibilityNodeInfo) {
+val et = edit(root) ?: return
+val t = JarvisService.igText
+if (et.text?.toString() != t) {
+val a = android.os.Bundle()
+a.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t)
+et.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, a)
+} else {
+val n = root.findAccessibilityNodeInfosByText("Send").firstOrNull { it.isClickable }
+if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.igText = "" }
+}
+}
+private fun edit(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+if (n == null) return null
+if (n.className?.toString() == "android.widget.EditText") return n
+for (i in 0 until n.childCount) { val r = edit(n.getChild(i)); if (r != null) return r }
+return null
 }
 override fun onInterrupt() {}
 }
