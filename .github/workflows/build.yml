@@ -55,7 +55,7 @@ jobs:
       kotlinOptions { jvmTarget = "17" }
      }
      dependencies {
-      implementation("ai.picovoice:porcupine-android:3.0.3")
+      implementation("com.alphacephei:vosk-android:0.3.47")
      }
      JEOF
      mkdir -p app/src/main
@@ -74,7 +74,7 @@ jobs:
       <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
       <uses-permission android:name="android.permission.INTERNET" />
       <uses-permission android:name="android.permission.WAKE_LOCK" />
-      <application android:label="Jarvis" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+      <application android:label="Jarvis" android:icon="@mipmap/ic_launcher" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
        <activity android:name=".MainActivity" android:exported="true">
         <intent-filter>
          <action android:name="android.intent.action.MAIN" />
@@ -89,9 +89,93 @@ jobs:
          <action android:name="android.service.notification.NotificationListenerService" />
         </intent-filter>
        </service>
+       <service android:name=".SendAcc" android:exported="true" android:label="Jarvis auto send"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+        <intent-filter>
+         <action android:name="android.accessibilityservice.AccessibilityService" />
+        </intent-filter>
+        <meta-data android:name="android.accessibilityservice" android:resource="@xml/acc" />
+       </service>
       </application>
      </manifest>
      JEOF
+     mkdir -p app/src/main/res/xml
+     cat > app/src/main/res/xml/acc.xml <<'JEOF'
+     <?xml version="1.0" encoding="utf-8"?>
+     <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+      android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged"
+      android:accessibilityFeedbackType="feedbackGeneric"
+      android:canRetrieveWindowContent="true"
+      android:packageNames="com.whatsapp,com.whatsapp.w4b"
+      android:description="@string/acc_desc"
+      android:notificationTimeout="200" />
+     JEOF
+     mkdir -p app/src/main/res/values
+     cat > app/src/main/res/values/strings.xml <<'JEOF'
+     <?xml version="1.0" encoding="utf-8"?>
+     <resources>
+      <string name="acc_desc">Jarvis WhatsApp message apne aap bhejne ke liye</string>
+     </resources>
+     JEOF
+     mkdir -p app/src/main/res/mipmap-xxxhdpi
+     base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp <<'JEOF'
+     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
+     JEOF
+     mkdir -p app/src/main/assets
+     curl -fL -o m.zip https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip || curl -fL -o m.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+     unzip -q m.zip -d mdl
+     mv mdl/* app/src/main/assets/model-en
+     echo uuid1 > app/src/main/assets/model-en/uuid
      mkdir -p app/src/main/java/com/vaibhav/jarvis
      cp *.kt app/src/main/java/com/vaibhav/jarvis/
   - run: gradle assembleDebug --no-daemon
