@@ -1,7 +1,10 @@
 package com.vaibhav.jarvis
+import android.accessibilityservice.AccessibilityService
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -81,4 +84,19 @@ if (!sd.isNullOrEmpty() && sd != title) { who = sd; group = title }
 val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }
 j.announce(who, app, text, group)
 }
+}
+class SendAcc : AccessibilityService() {
+override fun onAccessibilityEvent(e: AccessibilityEvent?) {
+if (System.currentTimeMillis() - JarvisService.sendAt > 20000) return
+val root = rootInActiveWindow ?: return
+var n: AccessibilityNodeInfo? = null
+for (id in arrayOf("com.whatsapp:id/send", "com.whatsapp.w4b:id/send")) {
+n = root.findAccessibilityNodeInfosByViewId(id).firstOrNull()
+if (n != null) break
+}
+if (n == null) n = root.findAccessibilityNodeInfosByText("Send").firstOrNull { it.isClickable }
+?: root.findAccessibilityNodeInfosByText("भेजें").firstOrNull { it.isClickable }
+if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.sendAt = 0L }
+}
+override fun onInterrupt() {}
 }
