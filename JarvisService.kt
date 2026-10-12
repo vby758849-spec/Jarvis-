@@ -18,6 +18,10 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.telephony.SmsManager
 import android.widget.Toast
+import org.vosk.Model
+import org.vosk.Recognizer
+import org.vosk.android.SpeechService
+import org.vosk.android.StorageService
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.text.SimpleDateFormat
@@ -29,7 +33,6 @@ import java.util.Date
 import java.util.Locale
 class JarvisService : Service(), RecognitionListener {
 private lateinit var sr: SpeechRecognizer
-private lateinit var am: AudioManager
 private var tts: TextToSpeech? = null
 private var ttsReady = false
 private val h = Handler(Looper.getMainLooper())
@@ -38,7 +41,7 @@ private var tk = 0
 private fun stayAwake(ms: Long) { awake = true; val t = ++tk; h.postDelayed({ if (t == tk) awake = false }, ms) }
 private var lastMsg = ""
 private var lastAnn = ""
-companion object { @Volatile var inst: JarvisService? = null }
+companion object { @Volatile var inst: JarvisService? = null; @Volatile var sendAt = 0L }
 private fun hi(t: String): String = try {
 if (Build.VERSION.SDK_INT >= 29 && t.any { it in 'A'..'z' }) android.icu.text.Transliterator.getInstance("Latin-Devanagari").transliterate(t) else t
 } catch (e: Exception) { t }
@@ -58,7 +61,7 @@ else -> app
 val g = if (group.isEmpty()) "" else hi(group) + " ग्रुप में "
 h.post {
 say("सर, " + hi(who) + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
-h.postDelayed({ stayAwake(20000) }, 4000)
+h.postDelayed({ wakeHit(true) }, 3500)
 }
 }
 private val sp by lazy { getSharedPreferences("j", Context.MODE_PRIVATE) }
@@ -89,18 +92,15 @@ override fun onDone(id: String?) { speaking = false }
 ttsReady = true
 }
 }
-am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-for (st in intArrayOf(AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM)) try { am.adjustStreamVolume(st, AudioManager.ADJUST_MUTE, 0) } catch (e: Exception) {}
 sr = SpeechRecognizer.createSpeechRecognizer(this)
 sr.setRecognitionListener(this)
-listen()
+initWake()
 }
 override fun onDestroy() {
 inst = null
 h.removeCallbacksAndMessages(null)
 sr.destroy(); tts?.shutdown()
-beep(false)
-for (st in intArrayOf(AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM)) try { am.adjustStreamVolume(st, AudioManager.ADJUST_UNMUTE, 0) } catch (e: Exception) {}
+try { vSvc?.shutdown(); vModel?.close() } catch (e: Exception) { }
 super.onDestroy()
 }
 private fun say(t: String) {
@@ -108,8 +108,42 @@ if (!ttsReady) return
 speaking = true
 tts?.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u")
 }
-private fun beep(m: Boolean) {
-try { am.adjustStreamVolume(AudioManager.STREAM_MUSIC, if (m) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE, 0) } catch (e: Exception) {}
+private var vModel: Model? = null
+private var vSvc: SpeechService? = null
+private fun initWake() {
+StorageService.unpack(this, "model-en", "model",
+StorageService.Callback<Model> { m -> h.post { vModel = m; startWake() } },
+StorageService.Callback<java.io.IOException> { e -> h.post { Toast.makeText(this, "Offline wake fail: " + e.message, Toast.LENGTH_LONG).show(); listen() } })
+}
+private fun startWake() {
+val m = vModel ?: run { listen(); return }
+try {
+vSvc?.shutdown()
+val r = Recognizer(m, 16000.0f, "[\"jarvis\", \"travis\", \"service\", \"harvest\", \"[unk]\"]")
+val sv = SpeechService(r, 16000.0f)
+vSvc = sv
+sv.startListening(object : org.vosk.android.RecognitionListener {
+override fun onPartialResult(p: String?) { chk(p) }
+override fun onResult(p: String?) { chk(p) }
+override fun onFinalResult(p: String?) { }
+override fun onError(e: Exception?) { h.post { vSvc = null; listen() } }
+override fun onTimeout() { }
+})
+} catch (e: Exception) { vModel = null; listen() }
+}
+private fun chk(j: String?) {
+if (j != null && Regex("jarvis|travis|service|harvest").containsMatchIn(j.lowercase())) h.post { wakeHit(false) }
+}
+private fun wakeHit(quiet: Boolean) {
+val sv = vSvc ?: return
+vSvc = null
+try { sv.stop(); sv.shutdown() } catch (e: Exception) { }
+stayAwake(20000)
+if (!quiet) say("जी भाई?")
+listen()
+}
+private fun next() {
+if (vModel != null && !awake) startWake() else h.postDelayed({ listen() }, 150)
 }
 private fun listen() {
 if (speaking) { h.postDelayed({ listen() }, 300); return }
@@ -117,20 +151,19 @@ val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, LANG)
 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
-beep(true)
-h.postDelayed({ beep(false) }, 600)
 try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 500) }
 }
 override fun onResults(b: Bundle?) {
 val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
 (l?.firstOrNull { wake.containsMatchIn(it.lowercase()) } ?: l?.firstOrNull())?.let { process(it.lowercase()) }
-h.postDelayed({ listen() }, 150)
+next()
 }
 override fun onError(e: Int) {
 sr.cancel()
-h.postDelayed({ listen() }, if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 150)
+if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) h.postDelayed({ listen() }, 1500) else next()
 }
 override fun onReadyForSpeech(p: Bundle?) {}
 override fun onBeginningOfSpeech() {}
@@ -166,6 +199,7 @@ say("ये मेरी नई आवाज़ है, पसंद आई?")
 }
 Regex("^(yaad rakh|yaad rakho|remember)|^याद रख").containsMatchIn(s) -> remember(s)
 Regex("torch|flashlight|टॉर्च|टोर्च|फ्लैशलाइट").containsMatchIn(s) -> torch(!Regex("\\b(off|band|bandh)\\b|बंद|बन्द|ऑफ").containsMatchIn(s))
+Regex("कितने बजे|टाइम क्या|samay kya|time kya|what time|बजे हैं").containsMatchIn(s) -> say("अभी " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()) + " हुए हैं")
 else -> ask(s)
 }
 }
@@ -190,7 +224,7 @@ Thread {
 val sys = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko bhai bulao. say hamesha Devanagari Hindi mein (English shabd English mein), 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """ + sp.getString("prof", "") + " Abhi: " + Date()
 val raw = Gemini.call(key, sys, hh, q)
 h.post {
-if (raw == null) { say("जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() }
+if (raw == null) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() }
 else {
 var jj: JSONObject? = null
 try { jj = JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { }
@@ -255,7 +289,8 @@ if (num == null) { say("$name कॉन्टैक्ट में नहीं
 if ("whatsapp" in s) {
 val n = num.filter { it.isDigit() }
 val full = if (n.length == 10) "91$n" else n
-say("$name को WhatsApp मैसेज तैयार है")
+say("$name को भेज रहा हूँ: $body")
+if (body.isNotEmpty()) sendAt = System.currentTimeMillis()
 go(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$full?text=" + Uri.encode(body))))
 } else {
 try {
