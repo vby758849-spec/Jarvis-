@@ -204,11 +204,25 @@ Regex("awaaz badlo|awaz badlo|voice change|change voice|आवाज़ बद�
 sp.edit().putInt("vk", sp.getInt("vk", 0) + 1).apply(); applyVoice()
 say("ये मेरी नई आवाज़ है, पसंद आई?")
 }
+Regex("(कॉल|फोन|फ़ोन|call|phone).*(उठा|रिसीव|अटेंड|receive|utha|pick|attend)").containsMatchIn(s) -> callCtl(true)
+Regex("(कॉल|फोन|फ़ोन|call|phone).*(काट|कट|रिजेक्ट|reject|cut|kaat|disconnect)").containsMatchIn(s) -> callCtl(false)
+Regex("auto ?reply|ऑटो ?रिप्लाई").containsMatchIn(s) -> {
+val on = !Regex("band|off|बंद|बन्द|ऑफ|हटा").containsMatchIn(s)
+sp.edit().putBoolean("ar", on).apply()
+say(if (on) "ऑटो रिप्लाई चालू है" else "ऑटो रिप्लाई बंद है")
+}
 Regex("^(yaad rakh|yaad rakho|remember)|^याद रख").containsMatchIn(s) -> remember(s)
 Regex("torch|flashlight|टॉर्च|टोर्च|फ्लैशलाइट").containsMatchIn(s) -> torch(!Regex("\\b(off|band|bandh)\\b|बंद|बन्द|ऑफ").containsMatchIn(s))
 Regex("कितने बजे|टाइम क्या|samay kya|time kya|what time|बजे हैं").containsMatchIn(s) -> say("अभी " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()) + " हुए हैं")
 else -> ask(s)
 }
+}
+private fun callCtl(accept: Boolean) {
+try {
+val tm = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
+if (accept) { tm.acceptRingingCall(); say("कॉल उठा लिया") }
+else if (Build.VERSION.SDK_INT >= 28) { tm.endCall(); say("कॉल काट दिया") }
+} catch (e: SecurityException) { say("कॉल की permission दो") } catch (e: Exception) { say("ये नहीं हो पाया") }
 }
 private fun applyVoice() {
 tts?.setPitch(sp.getFloat("pt", 0.65f)); tts?.setSpeechRate(1.05f)
