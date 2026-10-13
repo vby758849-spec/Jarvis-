@@ -61,14 +61,16 @@ return null
 }
 }
 class MsgListener : NotificationListenerService() {
+private val last = HashMap<String, Long>()
+private var hrStart = 0L
+private var hrCnt = 0
 override fun onNotificationPosted(sbn: StatusBarNotification) {
-val j = JarvisService.inst
-if (j == null) return
 val n = sbn.notification
-if (sbn.packageName == packageName) return
+val pk = sbn.packageName
+if (pk == packageName) return
 if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
 if ((n.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
-val known = sbn.packageName in setOf("com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "com.google.android.apps.messaging", "com.android.mms", "com.samsung.android.messaging", "com.instagram.android", "com.facebook.orca", "com.google.android.gm")
+val known = pk in setOf("com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "com.google.android.apps.messaging", "com.android.mms", "com.samsung.android.messaging", "com.instagram.android", "com.facebook.orca", "com.google.android.gm")
 if (!known && n.category != Notification.CATEGORY_MESSAGE && n.category != Notification.CATEGORY_EMAIL) return
 val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
 var text = (n.extras.getCharSequence(Notification.EXTRA_TEXT) ?: "").toString().take(200)
@@ -81,8 +83,45 @@ val tx = lb.getCharSequence("text")?.toString()
 if (!tx.isNullOrEmpty()) text = tx.take(200)
 if (!sd.isNullOrEmpty() && sd != title) { who = sd; group = title }
 }
-val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }
-j.announce(who, app, text, group)
+if (n.extras.getBoolean("android.isGroupConversation") && group.isEmpty()) group = title
+val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pk, 0)).toString() } catch (e: Exception) { pk }
+JarvisService.inst?.announce(who, app, text, group)
+if (pk.startsWith("com.whatsapp")) autoReply(sbn, who, text, group)
+}
+private fun autoReply(sbn: StatusBarNotification, who: String, text: String, group: String) {
+val sp = getSharedPreferences("j", MODE_PRIVATE)
+if (!sp.getBoolean("ar", false) || group.isNotEmpty() || text.isBlank()) return
+if (who.firstOrNull()?.let { it == '+' || it.isDigit() } == true) return
+val k = sp.getString("key", "")?.trim().orEmpty()
+if (k.isEmpty()) return
+val id = sbn.key ?: who
+val now = System.currentTimeMillis()
+if (now - (last[id] ?: 0L) < 120000) return
+if (now - hrStart > 3600000) { hrStart = now; hrCnt = 0 }
+if (hrCnt >= 15) return
+last[id] = now; hrCnt++
+val prof = sp.getString("prof", "") ?: ""
+Thread {
+val sys = """Tum Vaibhav ki taraf se WhatsApp par ek jaankar ko reply likh rahe ho jab Vaibhav busy hai. Reply chhota (1-2 vaakya), natural aur usi bhasha/style mein ho jisme message aaya hai (Hinglish ho to Roman letters mein). Koi vaada, paise ki baat, address, OTP, password ya koi serious/emergency baat mat karo; aisa message ho to reply mein SKIP likho. Sawal ka seedha jawab pata na ho to bolo ki Vaibhav abhi busy hai, baad mein baat karega. Sirf JSON do: {"reply":"..."} . Vaibhav ke baare mein: """ + prof
+val raw = Gemini.call(k, sys, emptyList(), "Bhejne wala: " + who + ". Message: " + text)
+if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
+val r = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()).optString("reply") } catch (e: Exception) { "" }
+if (r.isBlank() || r.contains("SKIP", true)) { JarvisService.lg("auto-reply skip: " + who); return@Thread }
+if (send(sbn, "(Jarvis, Vaibhav ka assistant) " + r)) JarvisService.lg("auto-reply -> " + who + ": " + r)
+else JarvisService.lg("auto-reply fail: reply button nahi mila")
+}.start()
+}
+private fun send(sbn: StatusBarNotification, text: String): Boolean {
+for (a in sbn.notification.actions ?: return false) {
+val ri = a.remoteInputs ?: continue
+if (ri.isEmpty()) continue
+val b = android.os.Bundle()
+for (r in ri) b.putCharSequence(r.resultKey, text)
+val i = android.content.Intent()
+android.app.RemoteInput.addResultsToIntent(ri, i, b)
+try { a.actionIntent.send(this, 0, i); return true } catch (e: Exception) { }
+}
+return false
 }
 }
 class SendAcc : AccessibilityService() {
