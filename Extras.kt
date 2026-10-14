@@ -9,6 +9,39 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+object Tr {
+private val m = listOf(
+"जी बॉस?" to "Yes, boss?", "जी, बोलिए" to "Yes?",
+"ये मेरी नई आवाज़ है, पसंद आई?" to "This is my new voice. Do you like it?",
+"अब आवाज़ और भारी है" to "My voice is deeper now", "अब आवाज़ हल्की है" to "My voice is lighter now",
+"ऑटो रिप्लाई चालू है" to "Auto reply is on", "ऑटो रिप्लाई बंद है" to "Auto reply is off",
+"कॉल उठा लिया" to "Call answered", "कॉल काट दिया" to "Call declined",
+"कॉल की permission दो" to "I need the call permission", "ये नहीं हो पाया" to "I could not do that",
+"याद रख लिया" to "Noted", "कोई नया मैसेज नहीं है" to "No new messages",
+"मुझे वैभव सर ने बनाया है" to "I was created by Vaibhav sir",
+"इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" to "No internet. I can only handle the torch and the time",
+"पहले ऐप में Gemini API key डालो" to "Please enter the Gemini API key in the app first",
+"जवाब नहीं मिल पाया, स्क्रीन पर error देखो" to "I could not get an answer. Check the error on screen",
+"अब मैं अंग्रेज़ी में बोलूँगा" to "Alright, I will speak English from now on",
+"ठीक है, अब हिंदी में बोलूँगा" to "Alright, switching to Hindi",
+"किसे और क्या मैसेज भेजना है?" to "Who should I message, and what should I say?",
+"क्या मैसेज भेजना है?" to "What should I send?", "कितने बजे का अलार्म?" to "What time for the alarm?",
+"अलार्म लगा दिया" to "Alarm set", "मैसेज नहीं गया" to "The message failed",
+"YouTube खोल रहा हूँ" to "Opening YouTube", " YouTube पर" to " on YouTube",
+"टॉर्च ऑन" to "Torch on", "टॉर्च ऑफ" to "Torch off", "टॉर्च नहीं चली" to "The torch failed",
+" को Instagram पर भेज रहा हूँ: " to ", sending on Instagram: ", " को भेज रहा हूँ: " to ", sending: ",
+" को कॉल लगा रहा हूँ" to ", calling now", " कॉन्टैक्ट में नहीं मिला" to " is not in your contacts",
+" ऐप नहीं मिली" to " app not found", " खोल रहा हूँ" to ", opening", " का रास्ता" to ", directions",
+"अभी " to "It is ", " हुए हैं" to ""
+).sortedByDescending { it.first.length }
+fun en(t: String): String { var r = t; for ((a, b) in m) r = r.replace(a, b); return r }
+fun sys(prof: String, en: Boolean): String {
+val base = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein). Roman/English letters mein poora jawab kabhi mat likho. Misaal: {"say":"जी बॉस, टॉर्च बंद कर दी","action":"torch","on":false}, 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """
+val rules = " Action tabhi do jab user ne saaf kaam karne ko kaha ho (call, message, YouTube, alarm, torch waghera). Sawal, shikayat ya aam baat par action none rakho. Tum call, SMS, WhatsApp aur Instagram par message, YouTube, maps, alarm, torch aur app khol sakte ho."
+val e = if (en) " IMPORTANT: say field hamesha English mein likho, Roman letters mein, Devanagari mein nahi. Style Iron Man ke Jarvis jaisa: calm, formal, thoda dry wit, chhota jawab, Vaibhav ko boss bolo, logon ke naam jaise Anita Yadav waise hi rakho. Koi pooche kisne banaya to say mein: I was created by Vaibhav sir." else ""
+return base + prof + " Abhi: " + java.util.Date() + rules + e
+}
+}
 object Gemini {
 @Volatile var lastErr = ""
 private var models: List<String>? = null
@@ -101,9 +134,9 @@ if (lb != null) {
 val sd = lb.getCharSequence("sender")?.toString()
 val tx = lb.getCharSequence("text")?.toString()
 if (!tx.isNullOrEmpty()) text = tx.take(200)
-if (!sd.isNullOrEmpty() && sd != title) { who = sd; group = title }
+if (!sd.isNullOrEmpty() && sd != title && !pk.startsWith("com.instagram")) { who = sd; group = title }
 }
-if (n.extras.getBoolean("android.isGroupConversation") && group.isEmpty()) group = title
+if ((n.extras.getBoolean("android.isGroupConversation") || !n.extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE).isNullOrEmpty()) && group.isEmpty()) group = title
 val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pk, 0)).toString() } catch (e: Exception) { pk }
 JarvisService.inst?.announce(who, app, text, group)
 if (pk.startsWith("com.whatsapp") || pk == "com.instagram.android") { JarvisService.lg("DM: " + who + (if (group.isEmpty()) "" else " (group)")); autoReply(sbn, who, text, group) }
