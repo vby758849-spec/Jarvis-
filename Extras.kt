@@ -136,10 +136,10 @@ val tx = lb.getCharSequence("text")?.toString()
 if (!tx.isNullOrEmpty()) text = tx.take(200)
 if (!sd.isNullOrEmpty() && sd != title && !pk.startsWith("com.instagram")) { who = sd; group = title }
 }
-if ((n.extras.getBoolean("android.isGroupConversation") || !n.extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE).isNullOrEmpty()) && group.isEmpty()) group = title
+if ((n.extras.getBoolean("android.isGroupConversation") || (pk.startsWith("com.whatsapp") && !n.extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE).isNullOrEmpty())) && group.isEmpty()) group = title
 val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pk, 0)).toString() } catch (e: Exception) { pk }
 JarvisService.inst?.announce(who, app, text, group)
-if (pk.startsWith("com.whatsapp") || pk == "com.instagram.android") { JarvisService.lg("DM: " + who + (if (group.isEmpty()) "" else " (group)")); autoReply(sbn, who, text, group) }
+if (pk.startsWith("com.whatsapp") || pk == "com.instagram.android") { JarvisService.lg("DM: " + who + (if (group.isEmpty()) "" else " (group: " + group + ")")); autoReply(sbn, who, text, group) }
 }
 private fun autoReply(sbn: StatusBarNotification, who: String, text: String, group: String) {
 val sp = getSharedPreferences("j", MODE_PRIVATE)
@@ -164,7 +164,7 @@ if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
 val r = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()).optString("reply") } catch (e: Exception) { "" }
 if (r.isBlank() || r.contains("SKIP", true)) { JarvisService.lg("auto-reply skip: " + who); return@Thread }
 if (send(sbn, "(Jarvis, Vaibhav ka assistant) " + r)) JarvisService.lg("auto-reply -> " + who + ": " + r)
-else JarvisService.lg("auto-reply fail: reply button nahi mila")
+else JarvisService.lg("auto-reply fail: reply button nahi mila, actions=" + (sbn.notification.actions?.joinToString { it.title.toString() + (if (it.remoteInputs != null) "*" else "") } ?: "none"))
 }.start()
 }
 private fun send(sbn: StatusBarNotification, text: String): Boolean {
