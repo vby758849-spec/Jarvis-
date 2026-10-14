@@ -106,6 +106,7 @@ jobs:
      <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
       android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged"
       android:accessibilityFeedbackType="feedbackGeneric"
+      android:accessibilityFlags="flagReportViewIds"
       android:canRetrieveWindowContent="true"
       android:packageNames="com.whatsapp,com.whatsapp.w4b,com.instagram.android"
       android:description="@string/acc_desc"
