@@ -72,12 +72,13 @@ private val hist = ArrayList<Pair<String, String>>()
 @Volatile private var speaking = false
 private val wake = Regex("jarvis|jarvish|travis|jar vis|jarwis|darvis|charvis|harvis|service|जार्विस|जारविस|जर्विस|जार्वीस|जारवीस|जरविस|ज़ार्विस|डार्विस|चार्विस|जार्विश")
 private var LANG = "hi-IN"
+private var off = false
 override fun onBind(i: Intent?): IBinder? = null
 override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
-lg("Jarvis v32")
+lg("Jarvis v33")
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
 val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai")
@@ -112,6 +113,11 @@ private fun curPt() = sp.getFloat("pt", if (isEn()) 0.85f else 0.65f)
 private fun say(t0: String) {
 if (!ttsReady) return
 val t = if (isEn()) Tr.en(t0) else t0
+try {
+val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+val mx = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+if (am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) < mx * 0.7) am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (mx * 0.8).toInt(), 0)
+} catch (e: Exception) { }
 speaking = true
 tts?.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u")
 }
@@ -153,22 +159,25 @@ vSvc = null
 lg("wake: Jarvis suna")
 try { sv.stop(); sv.shutdown() } catch (e: Exception) { }
 stayAwake(20000)
+if (!quiet) say("जी बॉस?")
 h.postDelayed({ listen() }, 120)
 }
 private fun next() {
 if (vModel != null && !awake) startWake() else h.postDelayed({ listen() }, 150)
 }
 private fun listen() {
-if (speaking) { h.postDelayed({ listen() }, 300); return }
+if (speaking) { h.postDelayed({ listen() }, 100); return }
 val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, LANG)
 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, off)
 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
 try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 500) }
 }
 override fun onResults(b: Bundle?) {
+off = false
 val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
 (l?.firstOrNull { wake.containsMatchIn(it.lowercase()) } ?: l?.firstOrNull())?.let { process(it.lowercase()) }
 next()
@@ -177,6 +186,7 @@ override fun onError(e: Int) {
 lg("SR error " + e)
 sr.cancel()
 if (e == 12 || e == 13) LANG = "en-IN"
+if (e == 1 || e == 2) off = true
 awake = false; tk++
 h.postDelayed({ next() }, 600)
 }
