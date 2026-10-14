@@ -51,7 +51,7 @@ fun announce(who: String, app: String, text: String, group: String) {
 val key = who + text
 if (key == lastAnn) return
 lastAnn = key
-lastMsg = who + " ने कहा: " + text
+lastMsg = if (isEn()) who + " said: " + text else who + " ने कहा: " + text
 h.postDelayed({ lastAnn = "" }, 10000)
 val ap = when {
 app.contains("whats", true) -> "व्हाट्सऐप"
@@ -60,9 +60,10 @@ app.contains("gmail", true) -> "जीमेल"
 app.contains("messag", true) || app.contains("sms", true) -> "मैसेज"
 else -> app
 }
-val g = if (group.isEmpty()) "" else hi(group) + " ग्रुप में "
+val g = if (group.isEmpty()) "" else group + " ग्रुप में "
 h.post {
-say("बॉस, " + hi(who) + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
+if (isEn()) say("Boss, " + who + " messaged you on " + app + (if (group.isEmpty()) "" else " in " + group) + ". Shall I read it?")
+else say("बॉस, " + who + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
 h.postDelayed({ wakeHit(true) }, 3500)
 }
 }
@@ -76,6 +77,7 @@ override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
+lg("Jarvis v32")
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
 val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai")
@@ -105,10 +107,17 @@ sr.destroy(); tts?.shutdown()
 try { vSvc?.shutdown(); vModel?.close() } catch (e: Exception) { }
 super.onDestroy()
 }
-private fun say(t: String) {
+private fun isEn() = sp.getString("lang", "en") == "en"
+private fun curPt() = sp.getFloat("pt", if (isEn()) 0.85f else 0.65f)
+private fun say(t0: String) {
 if (!ttsReady) return
+val t = if (isEn()) Tr.en(t0) else t0
 speaking = true
 tts?.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u")
+}
+private fun setLang(l: String) {
+sp.edit().putString("lang", l).putInt("vk", 0).apply(); applyVoice()
+say(if (l == "en") "अब मैं अंग्रेज़ी में बोलूँगा" else "ठीक है, अब हिंदी में बोलूँगा")
 }
 private var vModel: Model? = null
 private var vSvc: SpeechService? = null
@@ -144,8 +153,7 @@ vSvc = null
 lg("wake: Jarvis suna")
 try { sv.stop(); sv.shutdown() } catch (e: Exception) { }
 stayAwake(20000)
-if (!quiet) say("जी बॉस?")
-h.postDelayed({ listen() }, 300)
+h.postDelayed({ listen() }, 120)
 }
 private fun next() {
 if (vModel != null && !awake) startWake() else h.postDelayed({ listen() }, 150)
@@ -194,11 +202,11 @@ Regex("kis ?ne (banaya|bnaya|banaaya|create)|किसने (तुम्हे
 lastMsg.isNotEmpty() && (Regex("^(haan|han|yes|yeah|ji|padho|bolo|sunao)\\b").containsMatchIn(s) || Regex("^(हाँ|हां|पढ़ो|पढ़ दो|सुनाओ|बोलो)").containsMatchIn(s)) -> say(lastMsg)
 Regex("(message|msg|massage) ?(kya|padh|sunao)|kya (likha|message|msg)|padh ?do|padh ?ke sunao|read (the )?message|मैसेज (क्या|पढ़|सुना)|क्या (लिखा|मैसेज)|पढ़ के सुनाओ").containsMatchIn(s) -> say(if (lastMsg.isEmpty()) "कोई नया मैसेज नहीं है" else lastMsg)
 Regex("(awaaz|awaz|voice|आवाज़|आवाज).*(bhari|bhaari|gehri|deep|heavy|भारी|गहरी)|(bhari|bhaari|gehri|deep|heavy|भारी|गहरी).*(awaaz|awaz|voice|आवाज़|आवाज)").containsMatchIn(s) -> {
-sp.edit().putFloat("pt", maxOf(0.4f, sp.getFloat("pt", 0.65f) - 0.1f)).apply(); applyVoice()
+sp.edit().putFloat("pt", maxOf(0.4f, curPt() - 0.1f)).apply(); applyVoice()
 say("अब आवाज़ और भारी है")
 }
 Regex("(awaaz|awaz|voice|आवाज़|आवाज).*(patli|halki|light|पतली|हल्की)|(patli|halki|light|पतली|हल्की).*(awaaz|awaz|voice|आवाज़|आवाज)").containsMatchIn(s) -> {
-sp.edit().putFloat("pt", minOf(1.2f, sp.getFloat("pt", 0.65f) + 0.1f)).apply(); applyVoice()
+sp.edit().putFloat("pt", minOf(1.2f, curPt() + 0.1f)).apply(); applyVoice()
 say("अब आवाज़ हल्की है")
 }
 Regex("awaaz badlo|awaz badlo|voice change|change voice|आवाज़ बदल|आवाज बदल").containsMatchIn(s) -> {
@@ -207,6 +215,8 @@ say("ये मेरी नई आवाज़ है, पसंद आई?")
 }
 Regex("(कॉल|फोन|फ़ोन|call|phone).*(उठा|रिसीव|अटेंड|receive|utha|pick|attend)").containsMatchIn(s) -> callCtl(true)
 Regex("(कॉल|फोन|फ़ोन|call|phone).*(काट|कट|रिजेक्ट|reject|cut|kaat|disconnect)").containsMatchIn(s) -> callCtl(false)
+Regex("english|इंग्लिश|अंग्रेज").containsMatchIn(s) && Regex("bol|बोल|speak").containsMatchIn(s) -> setLang("en")
+Regex("hindi|हिंदी|हिन्दी").containsMatchIn(s) && Regex("bol|बोल|speak").containsMatchIn(s) -> setLang("hi")
 Regex("auto ?reply|ऑटो ?रिप्लाई").containsMatchIn(s) -> {
 val on = !Regex("band|off|बंद|बन्द|ऑफ|हटा").containsMatchIn(s)
 sp.edit().putBoolean("ar", on).apply()
@@ -227,12 +237,19 @@ else if (Build.VERSION.SDK_INT >= 28) { tm.endCall(); lg("call kaata"); say("क
 } catch (e: SecurityException) { lg("call permission: " + e.message); say("कॉल की permission दो") } catch (e: Exception) { lg("call error: " + e); say("ये नहीं हो पाया") }
 }
 private fun applyVoice() {
-tts?.setPitch(sp.getFloat("pt", 0.65f)); tts?.setSpeechRate(1.05f)
-val pref = Regex("hic|hid")
-val v = (tts?.voices ?: emptySet<android.speech.tts.Voice>())
-.filter { it.locale.language == "hi" }
-.sortedWith(compareBy({ !pref.containsMatchIn(it.name) }, { it.name }))
+val en = isEn()
+tts?.setPitch(curPt()); tts?.setSpeechRate(if (en) 0.95f else 1.05f)
+var r = tts?.setLanguage(if (en) Locale.UK else Locale("hi", "IN")) ?: -2
+if (en && r < 0) r = tts?.setLanguage(Locale("en", "IN")) ?: -2
+if (en && r < 0) tts?.setLanguage(Locale.US)
+val pref = Regex(if (en) "gbb|gbd|rjs" else "hic|hid")
+val lang = tts?.voice?.locale?.language ?: ""
+var v = (tts?.voices ?: emptySet<android.speech.tts.Voice>()).filter { it.locale.language == lang }
+val uk = v.filter { it.locale == Locale.UK }
+if (en && uk.isNotEmpty()) v = uk
+v = v.sortedWith(compareBy({ !pref.containsMatchIn(it.name) }, { it.isNetworkConnectionRequired }, { it.name }))
 if (v.isNotEmpty()) tts?.voice = v[sp.getInt("vk", 0) % v.size]
+lg("awaaz: " + tts?.voice?.name + " (" + v.size + " mili)")
 }
 private fun remember(s: String) {
 val fact = s.replace(Regex("^(yaad rakh|yaad rakho|remember|याद रख|याद रखो)( ki| that| कि)?"), "").trim()
@@ -244,7 +261,7 @@ val key = sp.getString("key", "")?.trim().orEmpty()
 if (key.isEmpty()) { say("पहले ऐप में Gemini API key डालो"); return }
 val hh = ArrayList(hist)
 Thread {
-val sys = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein). Roman/English letters mein poora jawab kabhi mat likho. Misaal: {"say":"जी बॉस, टॉर्च बंद कर दी","action":"torch","on":false}, 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """ + sp.getString("prof", "") + " Abhi: " + Date()
+val sys = Tr.sys(sp.getString("prof", "") ?: "", isEn())
 val raw = Gemini.call(key, sys, hh, q)
 h.post {
 if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() }
