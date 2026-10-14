@@ -62,7 +62,7 @@ else -> app
 }
 val g = if (group.isEmpty()) "" else hi(group) + " ग्रुप में "
 h.post {
-say("सर, " + hi(who) + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
+say("बॉस, " + hi(who) + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
 h.postDelayed({ wakeHit(true) }, 3500)
 }
 }
