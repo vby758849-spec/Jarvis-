@@ -41,8 +41,9 @@ companion object {
 @Volatile var igText = ""
 @Volatile var igAt = 0L
 val logs = java.util.concurrent.ConcurrentLinkedDeque<String>()
-fun lg(t: String) { logs.addLast(t.take(170)); while (logs.size > 14) logs.pollFirst() }
+fun lg(t: String) { logs.addLast(t.take(170)); while (logs.size > 22) logs.pollFirst() }
 }
+private fun dv(t: String) = if (t.count { it in 'A'..'z' } > t.length / 2) hi(t) else t
 private fun hi(t: String): String = try {
 if (Build.VERSION.SDK_INT >= 29 && t.any { it in 'A'..'z' }) android.icu.text.Transliterator.getInstance("Latin-Devanagari").transliterate(t) else t
 } catch (e: Exception) { t }
@@ -218,11 +219,12 @@ else -> ask(s)
 }
 }
 private fun callCtl(accept: Boolean) {
+if (MsgListener.inst?.callAct(accept) == true) { say(if (accept) "कॉल उठा लिया" else "कॉल काट दिया"); return }
 try {
 val tm = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
-if (accept) { tm.acceptRingingCall(); say("कॉल उठा लिया") }
-else if (Build.VERSION.SDK_INT >= 28) { tm.endCall(); say("कॉल काट दिया") }
-} catch (e: SecurityException) { say("कॉल की permission दो") } catch (e: Exception) { say("ये नहीं हो पाया") }
+if (accept) { tm.acceptRingingCall(); lg("call utha liya"); say("कॉल उठा लिया") }
+else if (Build.VERSION.SDK_INT >= 28) { tm.endCall(); lg("call kaata"); say("कॉल काट दिया") }
+} catch (e: SecurityException) { lg("call permission: " + e.message); say("कॉल की permission दो") } catch (e: Exception) { lg("call error: " + e); say("ये नहीं हो पाया") }
 }
 private fun applyVoice() {
 tts?.setPitch(sp.getFloat("pt", 0.65f)); tts?.setSpeechRate(1.05f)
@@ -242,7 +244,7 @@ val key = sp.getString("key", "")?.trim().orEmpty()
 if (key.isEmpty()) { say("पहले ऐप में Gemini API key डालो"); return }
 val hh = ArrayList(hist)
 Thread {
-val sys = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein), 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """ + sp.getString("prof", "") + " Abhi: " + Date()
+val sys = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein). Roman/English letters mein poora jawab kabhi mat likho. Misaal: {"say":"जी बॉस, टॉर्च बंद कर दी","action":"torch","on":false}, 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """ + sp.getString("prof", "") + " Abhi: " + Date()
 val raw = Gemini.call(key, sys, hh, q)
 h.post {
 if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() }
@@ -254,7 +256,7 @@ val j = jj
 val sy = (j?.optString("say") ?: raw).replace(Regex("[*#`_]"), "")
 hist.add(q to sy); if (hist.size > 6) hist.removeAt(0)
 val a = j?.optString("action") ?: "none"
-if (j == null || a == "none" || a.isEmpty()) say(sy) else act(a, j)
+if (j == null || a == "none" || a.isEmpty()) say(dv(sy)) else act(a, j)
 }
 }
 }.start()
