@@ -61,6 +61,25 @@ return null
 }
 }
 class MsgListener : NotificationListenerService() {
+companion object { @Volatile var inst: MsgListener? = null }
+override fun onListenerConnected() { inst = this }
+override fun onListenerDisconnected() { inst = null }
+fun callAct(accept: Boolean): Boolean {
+for (sbn in activeNotifications ?: return false) {
+if (!sbn.packageName.startsWith("com.whatsapp")) continue
+val n = sbn.notification
+val acts = n.actions ?: continue
+if (n.category != Notification.CATEGORY_CALL && acts.size < 2) continue
+for (a in acts) {
+val t = a.title?.toString()?.lowercase() ?: ""
+val ok = if (accept) Regex("answer|accept|उठा|जवाब|रिसीव|उत्तर").containsMatchIn(t) else Regex("decline|reject|end|काट|अस्वीकार|मना").containsMatchIn(t)
+if (ok) {
+try { a.actionIntent.send(); JarvisService.lg("WA call: " + t); return true } catch (e: Exception) { JarvisService.lg("WA call fail: " + e) }
+}
+}
+}
+return false
+}
 private val last = HashMap<String, Long>()
 private var hrStart = 0L
 private var hrCnt = 0
@@ -68,6 +87,7 @@ override fun onNotificationPosted(sbn: StatusBarNotification) {
 val n = sbn.notification
 val pk = sbn.packageName
 if (pk == packageName) return
+if (pk.startsWith("com.whatsapp")) JarvisService.lg("WA aaya f=" + n.flags + " cat=" + n.category)
 if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
 if ((n.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
 val known = pk in setOf("com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "com.google.android.apps.messaging", "com.android.mms", "com.samsung.android.messaging", "com.instagram.android", "com.facebook.orca", "com.google.android.gm")
@@ -86,23 +106,26 @@ if (!sd.isNullOrEmpty() && sd != title) { who = sd; group = title }
 if (n.extras.getBoolean("android.isGroupConversation") && group.isEmpty()) group = title
 val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pk, 0)).toString() } catch (e: Exception) { pk }
 JarvisService.inst?.announce(who, app, text, group)
-if (pk.startsWith("com.whatsapp")) autoReply(sbn, who, text, group)
+if (pk.startsWith("com.whatsapp") || pk == "com.instagram.android") { JarvisService.lg("DM: " + who + (if (group.isEmpty()) "" else " (group)")); autoReply(sbn, who, text, group) }
 }
 private fun autoReply(sbn: StatusBarNotification, who: String, text: String, group: String) {
 val sp = getSharedPreferences("j", MODE_PRIVATE)
-if (!sp.getBoolean("ar", false) || group.isNotEmpty() || text.isBlank()) return
-if (who.firstOrNull()?.let { it == '+' || it.isDigit() } == true) return
+fun sk(r: String) { JarvisService.lg("auto-reply skip: " + r) }
+if (!sp.getBoolean("ar", false)) { sk("band hai"); return }
+if (group.isNotEmpty()) { sk("group"); return }
+if (text.isBlank()) { sk("khali"); return }
+if (who.firstOrNull()?.let { it == '+' || it.isDigit() } == true) { sk("number"); return }
 val k = sp.getString("key", "")?.trim().orEmpty()
-if (k.isEmpty()) return
+if (k.isEmpty()) { sk("key nahi"); return }
 val id = sbn.key ?: who
 val now = System.currentTimeMillis()
-if (now - (last[id] ?: 0L) < 120000) return
+if (now - (last[id] ?: 0L) < 120000) { sk("2 min cooldown"); return }
 if (now - hrStart > 3600000) { hrStart = now; hrCnt = 0 }
-if (hrCnt >= 15) return
+if (hrCnt >= 15) { sk("limit"); return }
 last[id] = now; hrCnt++
 val prof = sp.getString("prof", "") ?: ""
 Thread {
-val sys = """Tum Vaibhav ki taraf se WhatsApp par ek jaankar ko reply likh rahe ho jab Vaibhav busy hai. Reply chhota (1-2 vaakya), natural aur usi bhasha/style mein ho jisme message aaya hai (Hinglish ho to Roman letters mein). Koi vaada, paise ki baat, address, OTP, password ya koi serious/emergency baat mat karo; aisa message ho to reply mein SKIP likho. Sawal ka seedha jawab pata na ho to bolo ki Vaibhav abhi busy hai, baad mein baat karega. Sirf JSON do: {"reply":"..."} . Vaibhav ke baare mein: """ + prof
+val sys = """Tum Vaibhav ki taraf se chat par ek jaankar ko reply likh rahe ho jab Vaibhav busy hai. Reply chhota (1-2 vaakya), natural aur usi bhasha/style mein ho jisme message aaya hai (Hinglish ho to Roman letters mein). Koi vaada, paise ki baat, address, OTP, password ya koi serious/emergency baat mat karo; aisa message ho to reply mein SKIP likho. Sawal ka seedha jawab pata na ho to bolo ki Vaibhav abhi busy hai, baad mein baat karega. Sirf JSON do: {"reply":"..."} . Vaibhav ke baare mein: """ + prof
 val raw = Gemini.call(k, sys, emptyList(), "Bhejne wala: " + who + ". Message: " + text)
 if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
 val r = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()).optString("reply") } catch (e: Exception) { "" }
@@ -145,11 +168,26 @@ val t = JarvisService.igText
 if (et.text?.toString() != t) {
 val a = android.os.Bundle()
 a.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t)
+et.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
 et.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, a)
+JarvisService.lg("IG: text likha")
 } else {
-val n = root.findAccessibilityNodeInfosByText("Send").firstOrNull { it.isClickable }
-if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.igText = "" }
+val n = findSend(root)
+if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.igText = ""; JarvisService.lg("IG: send dabaya") }
 }
+}
+private fun findSend(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+if (n == null) return null
+val id = n.viewIdResourceName ?: ""
+val t = n.text?.toString() ?: ""
+val d = n.contentDescription?.toString() ?: ""
+if (id.contains("send", true) || t.equals("Send", true) || d.startsWith("Send", true)) {
+var p: AccessibilityNodeInfo? = n
+while (p != null && !p.isClickable) p = p.parent
+if (p != null) return p
+}
+for (i in 0 until n.childCount) { val r = findSend(n.getChild(i)); if (r != null) return r }
+return null
 }
 private fun edit(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
 if (n == null) return null
