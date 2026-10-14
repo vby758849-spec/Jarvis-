@@ -63,7 +63,9 @@ status.text = "Band hai"
 val logv = TextView(this).apply { textSize = 12f; setTextColor(Color.parseColor("#9FE8FF")); setPadding(0, 24, 0, 0) }
 l.addView(logv)
 val hh = Handler(Looper.getMainLooper())
-hh.post(object : Runnable { override fun run() { logv.text = JarvisService.logs.joinToString("\n"); hh.postDelayed(this, 1000) } })
+hh.post(object : Runnable { override fun run() { val en = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: ""
+val ac = Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: ""
+logv.text = "Notification access: " + (if (en.contains(packageName)) "ON" else "OFF") + "\nAccessibility: " + (if (ac.contains(packageName)) "ON" else "OFF") + "\nAuto-reply: " + (if (sp.getBoolean("ar", false)) "ON" else "OFF") + "\n" + JarvisService.logs.joinToString("\n"); hh.postDelayed(this, 1000) } })
 setContentView(ScrollView(this).apply { setBackgroundColor(Color.parseColor("#050B14")); addView(l) })
 }
 private fun ask() {
