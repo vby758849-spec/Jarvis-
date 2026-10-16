@@ -9,41 +9,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-object Tr {
-private val m = listOf(
-"जी बॉस?" to "Yes, boss?", "जी, बोलिए" to "Yes?",
-"ये मेरी नई आवाज़ है, पसंद आई?" to "This is my new voice. Do you like it?",
-"अब आवाज़ और भारी है" to "My voice is deeper now", "अब आवाज़ हल्की है" to "My voice is lighter now",
-"ऑटो रिप्लाई चालू है" to "Auto reply is on", "ऑटो रिप्लाई बंद है" to "Auto reply is off",
-"कॉल उठा लिया" to "Call answered", "कॉल काट दिया" to "Call declined",
-"कॉल की permission दो" to "I need the call permission", "ये नहीं हो पाया" to "I could not do that",
-"याद रख लिया" to "Noted", "कोई नया मैसेज नहीं है" to "No new messages",
-"मुझे वैभव सर ने बनाया है" to "I was created by Vaibhav sir",
-"इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" to "No internet. I can only handle the torch and the time",
-"पहले ऐप में Gemini API key डालो" to "Please enter the Gemini API key in the app first",
-"जवाब नहीं मिल पाया, स्क्रीन पर error देखो" to "I could not get an answer. Check the error on screen",
-"अब मैं अंग्रेज़ी में बोलूँगा" to "Alright, I will speak English from now on",
-"ठीक है, अब हिंदी में बोलूँगा" to "Alright, switching to Hindi",
-"किसे और क्या मैसेज भेजना है?" to "Who should I message, and what should I say?",
-"क्या मैसेज भेजना है?" to "What should I send?", "कितने बजे का अलार्म?" to "What time for the alarm?",
-"अलार्म लगा दिया" to "Alarm set", "मैसेज नहीं गया" to "The message failed",
-"YouTube खोल रहा हूँ" to "Opening YouTube", " YouTube पर" to " on YouTube",
-"टॉर्च ऑन" to "Torch on", "टॉर्च ऑफ" to "Torch off", "टॉर्च नहीं चली" to "The torch failed",
-" को Instagram पर भेज रहा हूँ: " to ", sending on Instagram: ", " को भेज रहा हूँ: " to ", sending: ",
-" को कॉल लगा रहा हूँ" to ", calling now", " कॉन्टैक्ट में नहीं मिला" to " is not in your contacts",
-" ऐप नहीं मिली" to " app not found", " खोल रहा हूँ" to ", opening", " का रास्ता" to ", directions",
-"अभी " to "It is ", " हुए हैं" to ""
-).sortedByDescending { it.first.length }
-fun rsys(prof: String): String = """Tum Jarvis ho, Iron Man ke Tony Stark wale Jarvis ki tarah ek parishkrit, shant, kaam mein tez aur halke dry wit wala AI assistant, jo Vaibhav ke phone ka assistant hai. Abhi Vaibhav busy hai aur tum unki taraf se chat par jawab de rahe ho. Samne wale ke saare messages dhyan se padho aur unke matlab ke hisaab se seedha, sahi jawab do. Agar wo naya sawal poochhe to uska bhi samajhkar jawab do (general jaankari, saral sawal, baat-cheet sab). Reply chhota (1-3 vaakya), polite aur thoda witty ho. Usi bhasha aur lipi mein jawab do jisme sender ne likha hai (English to English, Hinglish to Roman Hinglish, Hindi ho to Devanagari). Pehli baar bolo ki tum Jarvis, Vaibhav ke assistant ho, baad mein repeat mat karo. Vaibhav ki taraf se koi vaada, pakka plan, paise ya payment, address, phone number, OTP, password ya private jaankari mat do. Jo kaam sirf Vaibhav kar sakte hain (decision, plan), uske liye bolo ki tum unhe sandesh pahuncha doge. Message paise/OTP/bank/emergency/dhamki ya spam jaisa ho to reply mein sirf SKIP likho. Sirf JSON do: {"reply":"..."} . Vaibhav ke baare mein jaankari (sirf zaroorat par use karo): """ + prof
-fun en(t: String): String { var r = t; for ((a, b) in m) r = r.replace(a, b); return r }
-fun sys(prof: String, en: Boolean): String {
-val base = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Iron Man ke Jarvis jaisa behave karo: shant, sharif, kaam mein tez, kabhi halka dry wit, lekin apnepan se, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein). Roman/English letters mein poora jawab kabhi mat likho. Misaal: {"say":"जी बॉस, टॉर्च बंद कर दी","action":"torch","on":false}, 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """
-val rules = " Action tabhi do jab user ne saaf kaam karne ko kaha ho (call, message, YouTube, alarm, torch waghera). Sawal, shikayat ya aam baat par action none rakho. Tum call, SMS, WhatsApp aur Instagram par message, YouTube, maps, alarm, torch aur app khol sakte ho."
-val e = if (en) " IMPORTANT: say field hamesha English mein likho, Roman letters mein, Devanagari mein nahi. Style Iron Man ke Jarvis jaisa: calm, formal, thoda dry wit, chhota jawab, Vaibhav ko boss bolo, logon ke naam jaise Anita Yadav waise hi rakho. Koi pooche kisne banaya to say mein: I was created by Vaibhav sir." else ""
-return base + prof + " Abhi: " + java.util.Date() + rules + e
-}
-}
 object Gemini {
+fun warm(key: String) { list(key) }
 @Volatile var lastErr = ""
 private var models: List<String>? = null
 private fun m(r: String, t: String) = JSONObject().put("role", r).put("parts", JSONArray().put(JSONObject().put("text", t)))
@@ -119,6 +86,7 @@ private val lastIn = HashMap<String, String>()
 private val lastAt = HashMap<String, Long>()
 private val cnt = HashMap<String, Int>()
 private var cntStart = 0L
+private val muted = HashMap<String, Long>()
 override fun onNotificationPosted(sbn: StatusBarNotification) {
 val n = sbn.notification
 val pk = sbn.packageName
@@ -156,6 +124,7 @@ val k = sp.getString("key", "")?.trim().orEmpty()
 if (k.isEmpty()) { sk("key nahi"); return }
 val id = sbn.key ?: who
 val now = System.currentTimeMillis()
+if (now < (muted[id] ?: 0L)) return
 if (lastIn[id] == text && now - (lastAt[id] ?: 0L) < 15000) return
 if (now - (lastAt[id] ?: 0L) < 4000) { sk("jaldi"); return }
 if (now - cntStart > 3600000) { cntStart = now; cnt.clear() }
@@ -168,7 +137,9 @@ val prof = sp.getString("prof", "") ?: ""
 Thread {
 val raw = Gemini.call(k, Tr.rsys(prof), hist, "Bhejne wala: " + who + ". Message: " + text)
 if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
-val r = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()).optString("reply") } catch (e: Exception) { "" }
+val jo = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { null }
+val r = jo?.optString("reply") ?: ""
+if (jo?.optBoolean("abuse") == true) { muted[id] = now + 3600000; JarvisService.inst?.alert(who) }
 if (r.isBlank() || r.contains("SKIP", true)) { JarvisService.lg("auto-reply skip: " + who); return@Thread }
 if (send(sbn, "(Jarvis, Vaibhav ka assistant) " + r)) {
 val l = chat.getOrPut(id) { ArrayList() }
@@ -196,11 +167,37 @@ override fun onServiceConnected() { JarvisService.lg("Accessibility chalu") }
 override fun onAccessibilityEvent(e: AccessibilityEvent?) {
 val root = rootInActiveWindow ?: return
 val now = System.currentTimeMillis()
+if (e?.packageName?.toString() == "com.android.settings") { if (JarvisService.btWant != 0 && now - JarvisService.btAt < 30000) bt(root); return }
 if (JarvisService.igText.isNotEmpty() && now - JarvisService.igAt < 25000 && e?.packageName?.toString() == "com.instagram.android") { ig(root); return }
 if (now - JarvisService.sendAt > 20000) return
 val n = findSend(root)
 if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.sendAt = 0L; JarvisService.lg("WA: send dabaya") }
 else if (now - lastLog > 3000) { lastLog = now; JarvisService.lg("WA: send button nahi mila") }
+}
+private var lastBt = 0L
+private fun up(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+var p = n
+while (p != null && !p.isClickable) p = p.parent
+return p
+}
+private fun sw(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+if (n == null) return null
+if (n.isCheckable && (n.className?.toString() ?: "").contains("Switch", true)) return n
+for (i in 0 until n.childCount) { val r = sw(n.getChild(i)); if (r != null) return r }
+return null
+}
+private fun bt(root: AccessibilityNodeInfo) {
+val want = JarvisService.btWant == 1
+val s = sw(root)
+if (s != null && s.isChecked != want) { up(s)?.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.lg("BT: switch dabaya"); return }
+val nm = JarvisService.btName
+if (nm.isEmpty()) { JarvisService.btWant = 0; return }
+val pb = root.findAccessibilityNodeInfosByText("Pair").firstOrNull { (it.className?.toString() ?: "").endsWith("Button") }
+if (pb != null) { pb.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.lg("BT: Pair dabaya"); JarvisService.btWant = 0; JarvisService.btName = ""; return }
+val now = System.currentTimeMillis()
+if (now - lastBt < 4000) return
+val d = root.findAccessibilityNodeInfosByText(nm).firstOrNull()
+if (d != null) { lastBt = now; up(d)?.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.lg("BT: " + nm + " dabaya") }
 }
 private fun ig(root: AccessibilityNodeInfo) {
 val et = edit(root) ?: return
