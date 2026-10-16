@@ -78,7 +78,7 @@ override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
-lg("Jarvis v33")
+lg("Jarvis v35")
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
 val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai")
@@ -352,7 +352,7 @@ if ("whatsapp" in s) {
 val n = num.filter { it.isDigit() }
 val full = if (n.length == 10) "91$n" else n
 say("$name को भेज रहा हूँ: $body")
-if (body.isNotEmpty()) sendAt = System.currentTimeMillis()
+if (body.isNotEmpty()) { sendAt = System.currentTimeMillis(); lg("WA: " + name + " ko likh raha, send ka intezaar") }
 go(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$full?text=" + Uri.encode(body))))
 } else {
 try {
