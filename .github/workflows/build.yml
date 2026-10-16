@@ -65,6 +65,7 @@ jobs:
       <uses-permission android:name="android.permission.RECORD_AUDIO" />
       <uses-permission android:name="android.permission.CALL_PHONE" />
       <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+      <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
       <uses-permission android:name="android.permission.SEND_SMS" />
       <uses-permission android:name="android.permission.READ_CONTACTS" />
       <uses-permission android:name="android.permission.SET_ALARM" />
@@ -108,7 +109,7 @@ jobs:
       android:accessibilityFeedbackType="feedbackGeneric"
       android:accessibilityFlags="flagReportViewIds"
       android:canRetrieveWindowContent="true"
-      android:packageNames="com.whatsapp,com.whatsapp.w4b,com.instagram.android"
+      android:packageNames="com.whatsapp,com.whatsapp.w4b,com.instagram.android,com.android.settings"
       android:description="@string/acc_desc"
       android:notificationTimeout="200" />
      JEOF
