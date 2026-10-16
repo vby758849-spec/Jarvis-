@@ -34,9 +34,10 @@ private val m = listOf(
 " ऐप नहीं मिली" to " app not found", " खोल रहा हूँ" to ", opening", " का रास्ता" to ", directions",
 "अभी " to "It is ", " हुए हैं" to ""
 ).sortedByDescending { it.first.length }
+fun rsys(prof: String): String = """Tum Jarvis ho, Iron Man ke Tony Stark wale Jarvis ki tarah ek parishkrit, shant, kaam mein tez aur halke dry wit wala AI assistant, jo Vaibhav ke phone ka assistant hai. Abhi Vaibhav busy hai aur tum unki taraf se chat par jawab de rahe ho. Samne wale ke saare messages dhyan se padho aur unke matlab ke hisaab se seedha, sahi jawab do. Agar wo naya sawal poochhe to uska bhi samajhkar jawab do (general jaankari, saral sawal, baat-cheet sab). Reply chhota (1-3 vaakya), polite aur thoda witty ho. Usi bhasha aur lipi mein jawab do jisme sender ne likha hai (English to English, Hinglish to Roman Hinglish, Hindi ho to Devanagari). Pehli baar bolo ki tum Jarvis, Vaibhav ke assistant ho, baad mein repeat mat karo. Vaibhav ki taraf se koi vaada, pakka plan, paise ya payment, address, phone number, OTP, password ya private jaankari mat do. Jo kaam sirf Vaibhav kar sakte hain (decision, plan), uske liye bolo ki tum unhe sandesh pahuncha doge. Message paise/OTP/bank/emergency/dhamki ya spam jaisa ho to reply mein sirf SKIP likho. Sirf JSON do: {"reply":"..."} . Vaibhav ke baare mein jaankari (sirf zaroorat par use karo): """ + prof
 fun en(t: String): String { var r = t; for ((a, b) in m) r = r.replace(a, b); return r }
 fun sys(prof: String, en: Boolean): String {
-val base = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Dost ki tarah casual aur friendly baat karo, kabhi halka mazaak, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein). Roman/English letters mein poora jawab kabhi mat likho. Misaal: {"say":"जी बॉस, टॉर्च बंद कर दी","action":"torch","on":false}, 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """
+val base = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Iron Man ke Jarvis jaisa behave karo: shant, sharif, kaam mein tez, kabhi halka dry wit, lekin apnepan se, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein). Roman/English letters mein poora jawab kabhi mat likho. Misaal: {"say":"जी बॉस, टॉर्च बंद कर दी","action":"torch","on":false}, 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """
 val rules = " Action tabhi do jab user ne saaf kaam karne ko kaha ho (call, message, YouTube, alarm, torch waghera). Sawal, shikayat ya aam baat par action none rakho. Tum call, SMS, WhatsApp aur Instagram par message, YouTube, maps, alarm, torch aur app khol sakte ho."
 val e = if (en) " IMPORTANT: say field hamesha English mein likho, Roman letters mein, Devanagari mein nahi. Style Iron Man ke Jarvis jaisa: calm, formal, thoda dry wit, chhota jawab, Vaibhav ko boss bolo, logon ke naam jaise Anita Yadav waise hi rakho. Koi pooche kisne banaya to say mein: I was created by Vaibhav sir." else ""
 return base + prof + " Abhi: " + java.util.Date() + rules + e
@@ -113,9 +114,11 @@ try { a.actionIntent.send(); JarvisService.lg("WA call: " + t); return true } ca
 }
 return false
 }
-private val last = HashMap<String, Long>()
-private var hrStart = 0L
-private var hrCnt = 0
+private val chat = java.util.concurrent.ConcurrentHashMap<String, ArrayList<Pair<String, String>>>()
+private val lastIn = HashMap<String, String>()
+private val lastAt = HashMap<String, Long>()
+private val cnt = HashMap<String, Int>()
+private var cntStart = 0L
 override fun onNotificationPosted(sbn: StatusBarNotification) {
 val n = sbn.notification
 val pk = sbn.packageName
@@ -147,24 +150,31 @@ fun sk(r: String) { JarvisService.lg("auto-reply skip: " + r) }
 if (!sp.getBoolean("ar", false)) { sk("band hai"); return }
 if (group.isNotEmpty()) { sk("group"); return }
 if (text.isBlank()) { sk("khali"); return }
+if (text.startsWith("(Jarvis")) return
 if (who.firstOrNull()?.let { it == '+' || it.isDigit() } == true) { sk("number"); return }
 val k = sp.getString("key", "")?.trim().orEmpty()
 if (k.isEmpty()) { sk("key nahi"); return }
 val id = sbn.key ?: who
 val now = System.currentTimeMillis()
-if (now - (last[id] ?: 0L) < 120000) { sk("2 min cooldown"); return }
-if (now - hrStart > 3600000) { hrStart = now; hrCnt = 0 }
-if (hrCnt >= 15) { sk("limit"); return }
-last[id] = now; hrCnt++
+if (lastIn[id] == text && now - (lastAt[id] ?: 0L) < 15000) return
+if (now - (lastAt[id] ?: 0L) < 4000) { sk("jaldi"); return }
+if (now - cntStart > 3600000) { cntStart = now; cnt.clear() }
+val c = cnt[id] ?: 0
+if (c >= 12) { sk("is chat ki ghante ki limit"); return }
+if (cnt.values.sum() >= 40) { sk("kul limit"); return }
+cnt[id] = c + 1; lastIn[id] = text; lastAt[id] = now
+val hist = ArrayList(chat[id] ?: ArrayList())
 val prof = sp.getString("prof", "") ?: ""
 Thread {
-val sys = """Tum Vaibhav ki taraf se chat par ek jaankar ko reply likh rahe ho jab Vaibhav busy hai. Reply chhota (1-2 vaakya), natural aur usi bhasha/style mein ho jisme message aaya hai (Hinglish ho to Roman letters mein). Koi vaada, paise ki baat, address, OTP, password ya koi serious/emergency baat mat karo; aisa message ho to reply mein SKIP likho. Sawal ka seedha jawab pata na ho to bolo ki Vaibhav abhi busy hai, baad mein baat karega. Sirf JSON do: {"reply":"..."} . Vaibhav ke baare mein: """ + prof
-val raw = Gemini.call(k, sys, emptyList(), "Bhejne wala: " + who + ". Message: " + text)
+val raw = Gemini.call(k, Tr.rsys(prof), hist, "Bhejne wala: " + who + ". Message: " + text)
 if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
 val r = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()).optString("reply") } catch (e: Exception) { "" }
 if (r.isBlank() || r.contains("SKIP", true)) { JarvisService.lg("auto-reply skip: " + who); return@Thread }
-if (send(sbn, "(Jarvis, Vaibhav ka assistant) " + r)) JarvisService.lg("auto-reply -> " + who + ": " + r)
-else JarvisService.lg("auto-reply fail: reply button nahi mila, actions=" + (sbn.notification.actions?.joinToString { it.title.toString() + (if (it.remoteInputs != null) "*" else "") } ?: "none"))
+if (send(sbn, "(Jarvis, Vaibhav ka assistant) " + r)) {
+val l = chat.getOrPut(id) { ArrayList() }
+l.add(text to r); while (l.size > 6) l.removeAt(0)
+JarvisService.lg("auto-reply -> " + who + ": " + r)
+} else JarvisService.lg("auto-reply fail: reply button nahi mila, actions=" + (sbn.notification.actions?.joinToString { it.title.toString() + (if (it.remoteInputs != null) "*" else "") } ?: "none"))
 }.start()
 }
 private fun send(sbn: StatusBarNotification, text: String): Boolean {
@@ -181,19 +191,16 @@ return false
 }
 }
 class SendAcc : AccessibilityService() {
+private var lastLog = 0L
+override fun onServiceConnected() { JarvisService.lg("Accessibility chalu") }
 override fun onAccessibilityEvent(e: AccessibilityEvent?) {
 val root = rootInActiveWindow ?: return
 val now = System.currentTimeMillis()
 if (JarvisService.igText.isNotEmpty() && now - JarvisService.igAt < 25000 && e?.packageName?.toString() == "com.instagram.android") { ig(root); return }
 if (now - JarvisService.sendAt > 20000) return
-var n: AccessibilityNodeInfo? = null
-for (id in arrayOf("com.whatsapp:id/send", "com.whatsapp.w4b:id/send")) {
-n = root.findAccessibilityNodeInfosByViewId(id).firstOrNull()
-if (n != null) break
-}
-if (n == null) n = root.findAccessibilityNodeInfosByText("Send").firstOrNull { it.isClickable }
-?: root.findAccessibilityNodeInfosByText("भेजें").firstOrNull { it.isClickable }
-if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.sendAt = 0L }
+val n = findSend(root)
+if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.sendAt = 0L; JarvisService.lg("WA: send dabaya") }
+else if (now - lastLog > 3000) { lastLog = now; JarvisService.lg("WA: send button nahi mila") }
 }
 private fun ig(root: AccessibilityNodeInfo) {
 val et = edit(root) ?: return
@@ -214,7 +221,7 @@ if (n == null) return null
 val id = n.viewIdResourceName ?: ""
 val t = n.text?.toString() ?: ""
 val d = n.contentDescription?.toString() ?: ""
-if (id.contains("send", true) || t.equals("Send", true) || d.startsWith("Send", true)) {
+if (id.contains("send", true) || t.equals("Send", true) || d.startsWith("Send", true) || d.startsWith("भेज")) {
 var p: AccessibilityNodeInfo? = n
 while (p != null && !p.isClickable) p = p.parent
 if (p != null) return p
