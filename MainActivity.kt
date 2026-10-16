@@ -15,7 +15,7 @@ import android.view.Gravity
 import android.widget.*
 class MainActivity : Activity() {
 private lateinit var status: TextView
-private val perms = mutableListOf(RECORD_AUDIO, CALL_PHONE, SEND_SMS, READ_CONTACTS, ANSWER_PHONE_CALLS).apply {
+private val perms = mutableListOf(RECORD_AUDIO, CALL_PHONE, SEND_SMS, READ_CONTACTS, ANSWER_PHONE_CALLS, ACCESS_COARSE_LOCATION).apply {
 if (Build.VERSION.SDK_INT >= 33) add(POST_NOTIFICATIONS)
 }.toTypedArray()
 private val DEF = "Mera naam Vaibhav hai (majin Vaibhav). Main games bana raha hoon: Ludo, chess, Majin runner, Yadavi Ji Dodh Nikale, torch game, aur Jarvis assistant."
