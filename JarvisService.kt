@@ -40,6 +40,9 @@ companion object {
 @Volatile var sendAt = 0L
 @Volatile var igText = ""
 @Volatile var igAt = 0L
+@Volatile var btWant = 0
+@Volatile var btAt = 0L
+@Volatile var btName = ""
 val logs = java.util.concurrent.ConcurrentLinkedDeque<String>()
 fun lg(t: String) { logs.addLast(t.take(170)); while (logs.size > 22) logs.pollFirst() }
 }
@@ -53,6 +56,7 @@ if (key == lastAnn) return
 lastAnn = key
 lastMsg = if (isEn()) who + " said: " + text else who + " ने कहा: " + text
 h.postDelayed({ lastAnn = "" }, 10000)
+if (!sp.getBoolean("an", true)) return
 val ap = when {
 app.contains("whats", true) -> "व्हाट्सऐप"
 app.contains("telegram", true) -> "टेलीग्राम"
@@ -78,7 +82,8 @@ override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
-lg("Jarvis v35")
+lg("Jarvis v36")
+sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
 val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai")
@@ -90,8 +95,8 @@ if (it == TextToSpeech.SUCCESS) {
 tts?.language = Locale("hi", "IN")
 applyVoice()
 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-override fun onStart(id: String?) { speaking = true }
-override fun onDone(id: String?) { speaking = false }
+override fun onStart(id: String?) { speaking = true; vSvc?.setPause(true) }
+override fun onDone(id: String?) { speaking = false; vSvc?.setPause(false) }
 @Deprecated("x") override fun onError(id: String?) { speaking = false }
 })
 ttsReady = true
@@ -108,15 +113,15 @@ sr.destroy(); tts?.shutdown()
 try { vSvc?.shutdown(); vModel?.close() } catch (e: Exception) { }
 super.onDestroy()
 }
-private fun isEn() = sp.getString("lang", "en") == "en"
+fun isEn() = sp.getString("lang", "en") == "en"
 private fun curPt() = sp.getFloat("pt", if (isEn()) 0.85f else 0.65f)
-private fun say(t0: String) {
+fun say(t0: String) {
 if (!ttsReady) return
 val t = if (isEn()) Tr.en(t0) else t0
 try {
 val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
 val mx = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-if (am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) < mx * 0.7) am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (mx * 0.8).toInt(), 0)
+if (!sp.getBoolean("manvol", false) && am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) < mx * 0.7) am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (mx * 0.8).toInt(), 0)
 } catch (e: Exception) { }
 speaking = true
 tts?.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u")
@@ -138,6 +143,7 @@ val m = vModel ?: run { listen(); return }
 try {
 vSvc?.shutdown()
 val r = Recognizer(m, 16000.0f, "[\"jarvis\", \"travis\", \"[unk]\"]")
+r.setWords(true)
 val sv = SpeechService(r, 16000.0f)
 vSvc = sv
 lg("Vosk sun raha hai")
@@ -151,7 +157,14 @@ override fun onTimeout() { }
 } catch (e: Exception) { Toast.makeText(this, "Wake start fail: " + e, Toast.LENGTH_LONG).show(); vModel = null; listen() }
 }
 private fun chk(j: String?) {
-if (j != null && Regex("jarvis|travis").containsMatchIn(j.lowercase())) h.post { wakeHit(false) }
+if (j == null) return
+try {
+val a = JSONObject(j).optJSONArray("result") ?: return
+for (i in 0 until a.length()) {
+val o = a.getJSONObject(i)
+if (o.optString("word") in listOf("jarvis", "travis") && o.optDouble("conf", 0.0) >= 0.85) { h.post { wakeHit(false) }; return }
+}
+} catch (e: Exception) { }
 }
 private fun wakeHit(quiet: Boolean) {
 val sv = vSvc ?: return
@@ -172,8 +185,8 @@ val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, LANG)
 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
 .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, off)
-.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
-.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
+.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
+.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 800L)
 try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 500) }
 }
 override fun onResults(b: Bundle?) {
@@ -234,9 +247,21 @@ say(if (on) "ऑटो रिप्लाई चालू है" else "ऑट�
 }
 Regex("^(yaad rakh|yaad rakho|remember)|^याद रख").containsMatchIn(s) -> remember(s)
 Regex("torch|flashlight|टॉर्च|टोर्च|फ्लैशलाइट").containsMatchIn(s) -> torch(!Regex("\\b(off|band|bandh)\\b|बंद|बन्द|ऑफ").containsMatchIn(s))
+Regex("(message|मैसेज|मेसेज|notification|नोटिफिकेशन).*(batana|बताना|बताओ)|(batana|बताना|बताओ).*(message|मैसेज|मेसेज|notification|नोटिफिकेशन)").containsMatchIn(s) -> {
+val on = !Regex("band|बंद|बन्द|off|ऑफ|रोक").containsMatchIn(s)
+sp.edit().putBoolean("an", on).apply()
+say(if (on) "मैसेज बताना चालू" else "मैसेज बताना बंद")
+}
+Regex("(volume|वॉल्यूम|आवाज़|आवाज)").containsMatchIn(s) && Regex("badha|बढ़ा|ज़्यादा|zyada|तेज़|tez|full|फुल|kam|कम|घटा|ghata|धीमा|dheema|mute|म्यूट|max|min").containsMatchIn(s) -> volume(s)
+Regex("(gaana|gana|song|गाना|गाने)").containsMatchIn(s) && Regex("badlo|बदलो|बदल|next|नेक्स्ट|agla|अगला").containsMatchIn(s) -> media("next")
+Regex("(pichla|पिछला|previous|पिछले)").containsMatchIn(s) && Regex("(gaana|gana|song|गाना|गाने)").containsMatchIn(s) -> media("previous")
+Regex("(bluetooth|ब्लूटूथ|ब्लुटूथ)").containsMatchIn(s) && !Regex("जोड़|pair|connect|कनेक्ट").containsMatchIn(s) -> bluetooth(!Regex("off|band|बंद|बन्द|ऑफ").containsMatchIn(s))
 Regex("कितने बजे|टाइम क्या|samay kya|time kya|what time|बजे हैं").containsMatchIn(s) -> say("अभी " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()) + " हुए हैं")
 else -> ask(s)
 }
+}
+fun alert(who: String) {
+h.post { say(if (isEn()) "Boss, " + who + " was abusive. I have stopped replying to them for an hour." else "बॉस, " + who + " ने बदतमीज़ी की। मैंने एक घंटे के लिए जवाब रोक दिया।") }
 }
 private fun callCtl(accept: Boolean) {
 if (MsgListener.inst?.callAct(accept) == true) { say(if (accept) "कॉल उठा लिया" else "कॉल काट दिया"); return }
@@ -312,92 +337,16 @@ catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 "alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")))
 "torch" -> torch(j.optBoolean("on", true))
 "openapp" -> openApp("open " + j.optString("app").lowercase())
+"weather" -> weather(j.optString("query"))
+"media" -> media(j.optString("query").lowercase())
+"bluetooth" -> bluetooth(j.optBoolean("on", true))
+"btpair" -> btPair(j.optString("name"))
+"wacall" -> waCall(j.optString("name"), j.optString("query").contains("video", true))
+"volume" -> volume(j.optString("query").lowercase())
 else -> say(j.optString("say"))
 }
 }
-private fun go(i: Intent): Boolean = try {
+fun go(i: Intent): Boolean = try {
 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
 } catch (e: Exception) { say("ये नहीं हो पाया"); false }
-private fun digits(s: String) = Regex("\\+?\\d[\\d ]{6,}\\d").find(s)?.value?.replace(" ", "")
-private fun findNumber(name: String): String? {
-if (name.isBlank() || checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return null
-contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER), ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIKE ?", arrayOf("%$name%"), null)?.use {
-if (it.moveToFirst()) return it.getString(0)
-}
-return null
-}
-private fun call(s: String) {
-val name = s.replace(Regex("\\b(call|karo|kar|do|lagao|laga|ko|phone|please)\\b"), "").trim()
-val num = digits(s) ?: findNumber(name)
-if (num == null) { say("$name कॉन्टैक्ट में नहीं मिला"); return }
-say("$name को कॉल लगा रहा हूँ")
-go(Intent(Intent.ACTION_CALL, Uri.parse("tel:$num")))
-}
-@Suppress("DEPRECATION")
-private fun msg(s: String) {
-val t = s.replace(Regex("\\b(send|message|sms|msg|whatsapp|bhejo|bhej|bhejna|karo|likh|likho|text)\\b"), "")
-.replace(Regex("\\s+"), " ").trim()
-val d = digits(t)
-val name: String; val body: String
-if (d != null) { name = d; body = t.replace(Regex("\\+?\\d[\\d ]{6,}\\d"), "").replace(" ko ", " ").trim() }
-else {
-val k = t.indexOf(" ko ")
-if (k > 0) { name = t.substring(0, k).trim(); body = t.substring(k + 4).trim() }
-else if (t.endsWith(" ko")) { name = t.removeSuffix(" ko"); body = "" }
-else { val p = t.split(" ", limit = 2); name = p[0]; body = p.getOrElse(1) { "" } }
-}
-val num = d ?: findNumber(name)
-if (num == null) { say("$name कॉन्टैक्ट में नहीं मिला"); return }
-if ("whatsapp" in s) {
-val n = num.filter { it.isDigit() }
-val full = if (n.length == 10) "91$n" else n
-say("$name को भेज रहा हूँ: $body")
-if (body.isNotEmpty()) { sendAt = System.currentTimeMillis(); lg("WA: " + name + " ko likh raha, send ka intezaar") }
-go(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$full?text=" + Uri.encode(body))))
-} else {
-try {
-val sm = if (Build.VERSION.SDK_INT >= 31) getSystemService(SmsManager::class.java) else SmsManager.getDefault()
-sm.sendMultipartTextMessage(num, null, sm.divideMessage(body), null, null)
-say("$name को मैसेज भेज दिया")
-} catch (e: Exception) { say("मैसेज नहीं गया") }
-}
-}
-private fun alarm(s: String) {
-val m = Regex("(\\d{1,2})(?:[: ](\\d{2}))?\\s*(am|pm|baje)?").find(s)
-if (m == null) { say("कितने बजे का अलार्म?"); return }
-var hr = m.groupValues[1].toInt(); val mn = m.groupValues[2].toIntOrNull() ?: 0
-val ap = m.groupValues[3]
-if (ap == "pm" && hr < 12) hr += 12
-if (ap == "am" && hr == 12) hr = 0
-say("अलार्म लगा दिया")
-go(Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hr)
-.putExtra(AlarmClock.EXTRA_MINUTES, mn).putExtra(AlarmClock.EXTRA_SKIP_UI, true))
-}
-private fun youtube(s: String) {
-val q = s.replace(Regex("\\b(youtube|play|chalao|chala|kholo|khol|open|par|pe|on|karo|do|gaana|song)\\b"), "").trim()
-if (q.isEmpty()) {
-say("YouTube खोल रहा हूँ")
-go(packageManager.getLaunchIntentForPackage("com.google.android.youtube") ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://youtube.com")))
-} else {
-say("$q YouTube पर")
-go(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(q))))
-}
-}
-private fun openApp(s: String) {
-val name = s.replace(Regex("\\b(open|kholo|khol|karo|app|do|ko)\\b"), "").trim()
-if (name.isEmpty()) return
-val pm = packageManager
-val li = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-val hit = li.firstOrNull { it.loadLabel(pm).toString().lowercase().contains(name) }
-val i = hit?.let { pm.getLaunchIntentForPackage(it.activityInfo.packageName) }
-if (i != null) { say("$name खोल रहा हूँ"); go(i) } else say("$name ऐप नहीं मिली")
-}
-private fun torch(on: Boolean) {
-try {
-val cm = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-val id = cm.cameraIdList.first { cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
-cm.setTorchMode(id, on)
-say(if (on) "टॉर्च ऑन" else "टॉर्च ऑफ")
-} catch (e: Exception) { say("टॉर्च नहीं चली") }
-}
 }
