@@ -82,7 +82,7 @@ override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
-lg("Jarvis v36")
+lg("Jarvis v37")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
@@ -173,20 +173,20 @@ lg("wake: Jarvis suna")
 try { sv.stop(); sv.shutdown() } catch (e: Exception) { }
 stayAwake(20000)
 if (!quiet) say("जी बॉस?")
-h.postDelayed({ listen() }, 120)
+h.postDelayed({ listen() }, 60)
 }
 private fun next() {
 if (vModel != null && !awake) startWake() else h.postDelayed({ listen() }, 150)
 }
 private fun listen() {
-if (speaking) { h.postDelayed({ listen() }, 100); return }
+if (speaking) { h.postDelayed({ listen() }, 60); return }
 val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, LANG)
 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
 .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, off)
-.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
-.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 800L)
+.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
+.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 700L)
 try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 500) }
 }
 override fun onResults(b: Bundle?) {
@@ -256,12 +256,18 @@ Regex("(volume|वॉल्यूम|आवाज़|आवाज)").containsMat
 Regex("(gaana|gana|song|गाना|गाने)").containsMatchIn(s) && Regex("badlo|बदलो|बदल|next|नेक्स्ट|agla|अगला").containsMatchIn(s) -> media("next")
 Regex("(pichla|पिछला|previous|पिछले)").containsMatchIn(s) && Regex("(gaana|gana|song|गाना|गाने)").containsMatchIn(s) -> media("previous")
 Regex("(bluetooth|ब्लूटूथ|ब्लुटूथ)").containsMatchIn(s) && !Regex("जोड़|pair|connect|कनेक्ट").containsMatchIn(s) -> bluetooth(!Regex("off|band|बंद|बन्द|ऑफ").containsMatchIn(s))
+Regex("(\\bad\\b|ads|विज्ञापन|एड).*(skip|स्किप|छोड़)|(skip|स्किप).*(\\bad\\b|ads|विज्ञापन|एड)").containsMatchIn(s) -> {
+val on = !Regex("band|बंद|बन्द|off|ऑफ|रोक").containsMatchIn(s)
+sp.edit().putBoolean("ys", on).apply()
+say(if (on) "ऐड स्किप चालू" else "ऐड स्किप बंद")
+}
+Regex("schedule|शेड्यूल|कैलेंडर|calendar|agenda|एजेंडा|मीटिंग").containsMatchIn(s) -> agenda()
 Regex("कितने बजे|टाइम क्या|samay kya|time kya|what time|बजे हैं").containsMatchIn(s) -> say("अभी " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()) + " हुए हैं")
 else -> ask(s)
 }
 }
 fun alert(who: String) {
-h.post { say(if (isEn()) "Boss, " + who + " was abusive. I have stopped replying to them for an hour." else "बॉस, " + who + " ने बदतमीज़ी की। मैंने एक घंटे के लिए जवाब रोक दिया।") }
+h.post { say(if (isEn()) "Boss, " + who + " insulted you. I have replied and paused for ten minutes." else "बॉस, " + who + " ने आपकी बेइज़्ज़ती की। मैंने जवाब दे दिया और दस मिनट के लिए रोक दिया।") }
 }
 private fun callCtl(accept: Boolean) {
 if (MsgListener.inst?.callAct(accept) == true) { say(if (accept) "कॉल उठा लिया" else "कॉल काट दिया"); return }
@@ -299,7 +305,7 @@ Thread {
 val sys = Tr.sys(sp.getString("prof", "") ?: "", isEn())
 val raw = Gemini.call(key, sys, hh, q)
 h.post {
-if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, स्क्रीन पर error देखो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() }
+if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); if (!offline(q)) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, थोड़ी देर बाद फिर कोशिश करो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() } }
 else {
 lg("Gemini: " + raw)
 var jj: JSONObject? = null
@@ -334,7 +340,8 @@ catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
 "youtube" -> youtube("youtube " + j.optString("query"))
 "maps" -> { val q = j.optString("query"); say(q + " का रास्ता"); go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)))) }
-"alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")))
+"alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")), tx)
+"agenda" -> agenda()
 "torch" -> torch(j.optBoolean("on", true))
 "openapp" -> openApp("open " + j.optString("app").lowercase())
 "weather" -> weather(j.optString("query"))
@@ -350,3 +357,4 @@ fun go(i: Intent): Boolean = try {
 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
 } catch (e: Exception) { say("ये नहीं हो पाया"); false }
 }
+
