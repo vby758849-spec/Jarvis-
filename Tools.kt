@@ -160,7 +160,7 @@ say("$name को मैसेज भेज दिया")
 } catch (e: Exception) { say("मैसेज नहीं गया") }
 }
 }
-fun JarvisService.alarm(s: String) {
+fun JarvisService.alarm(s: String, label: String = "") {
 val m = Regex("(\\d{1,2})(?:[: ](\\d{2}))?\\s*(am|pm|baje)?").find(s)
 if (m == null) { say("कितने बजे का अलार्म?"); return }
 var hr = m.groupValues[1].toInt(); val mn = m.groupValues[2].toIntOrNull() ?: 0
@@ -169,7 +169,7 @@ if (ap == "pm" && hr < 12) hr += 12
 if (ap == "am" && hr == 12) hr = 0
 say("अलार्म लगा दिया")
 go(Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hr)
-.putExtra(AlarmClock.EXTRA_MINUTES, mn).putExtra(AlarmClock.EXTRA_SKIP_UI, true))
+.putExtra(AlarmClock.EXTRA_MINUTES, mn).putExtra(AlarmClock.EXTRA_SKIP_UI, true).putExtra(AlarmClock.EXTRA_MESSAGE, label))
 }
 fun JarvisService.youtube(s: String) {
 val q = s.replace(Regex("\\b(youtube|play|chalao|chala|kholo|khol|open|par|pe|on|karo|do|gaana|song)\\b"), "").trim()
@@ -198,41 +198,40 @@ cm.setTorchMode(id, on)
 say(if (on) "टॉर्च ऑन" else "टॉर्च ऑफ")
 } catch (e: Exception) { say("टॉर्च नहीं चली") }
 }
-object Tr {
-private val m = listOf(
-"जी बॉस?" to "Yes, boss?", "जी, बोलिए" to "Yes?",
-"ये मेरी नई आवाज़ है, पसंद आई?" to "This is my new voice. Do you like it?",
-"अब आवाज़ और भारी है" to "My voice is deeper now", "अब आवाज़ हल्की है" to "My voice is lighter now",
-"ऑटो रिप्लाई चालू है" to "Auto reply is on", "ऑटो रिप्लाई बंद है" to "Auto reply is off",
-"कॉल उठा लिया" to "Call answered", "कॉल काट दिया" to "Call declined",
-"कॉल की permission दो" to "I need the call permission", "ये नहीं हो पाया" to "I could not do that",
-"याद रख लिया" to "Noted", "कोई नया मैसेज नहीं है" to "No new messages",
-"मुझे वैभव सर ने बनाया है" to "I was created by Vaibhav sir",
-"इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" to "No internet. I can only handle the torch and the time",
-"पहले ऐप में Gemini API key डालो" to "Please enter the Gemini API key in the app first",
-"जवाब नहीं मिल पाया, स्क्रीन पर error देखो" to "I could not get an answer. Check the error on screen",
-"अब मैं अंग्रेज़ी में बोलूँगा" to "Alright, I will speak English from now on",
-"ठीक है, अब हिंदी में बोलूँगा" to "Alright, switching to Hindi", "ठीक है" to "Right away",
-"मैसेज बताना चालू" to "Message announcements on", "मैसेज बताना बंद" to "Message announcements off",
-" का WhatsApp कॉन्टैक्ट नहीं मिला" to " has no WhatsApp contact", " को WhatsApp कॉल लगा रहा हूँ" to ", calling on WhatsApp",
-"ब्लूटूथ चालू कर रहा हूँ" to "Turning Bluetooth on", "ब्लूटूथ बंद कर रहा हूँ" to "Turning Bluetooth off", " से जोड़ रहा हूँ" to ", pairing now",
-"कौन सा शहर?" to "Which city?", "मौसम की जानकारी नहीं मिली" to "I could not fetch the weather",
-"किसे और क्या मैसेज भेजना है?" to "Who should I message, and what should I say?",
-"क्या मैसेज भेजना है?" to "What should I send?", "कितने बजे का अलार्म?" to "What time for the alarm?",
-"अलार्म लगा दिया" to "Alarm set", "मैसेज नहीं गया" to "The message failed",
-"YouTube खोल रहा हूँ" to "Opening YouTube", " YouTube पर" to " on YouTube",
-"टॉर्च ऑन" to "Torch on", "टॉर्च ऑफ" to "Torch off", "टॉर्च नहीं चली" to "The torch failed",
-" को Instagram पर भेज रहा हूँ: " to ", sending on Instagram: ", " को भेज रहा हूँ: " to ", sending: ",
-" को कॉल लगा रहा हूँ" to ", calling now", " कॉन्टैक्ट में नहीं मिला" to " is not in your contacts",
-" ऐप नहीं मिली" to " app not found", " खोल रहा हूँ" to ", opening", " का रास्ता" to ", directions",
-"अभी " to "It is ", " हुए हैं" to ""
-).sortedByDescending { it.first.length }
-fun rsys(prof: String): String = """Tum Jarvis ho, Iron Man ke Tony Stark wale Jarvis ki tarah ek parishkrit, shant, kaam mein tez aur halke dry wit wala AI assistant, jo Vaibhav ke phone ka assistant hai. Abhi Vaibhav busy hai aur tum unki taraf se chat par jawab de rahe ho. Samne wale ke saare messages dhyan se padho aur unke matlab ke hisaab se seedha, sahi jawab do. Agar wo naya sawal poochhe to uska bhi samajhkar jawab do (general jaankari, saral sawal, baat-cheet sab). Reply chhota (1-3 vaakya), polite aur thoda witty ho. Usi bhasha aur lipi mein jawab do jisme sender ne likha hai (English to English, Hinglish to Roman Hinglish, Hindi ho to Devanagari). Pehli baar bolo ki tum Jarvis, Vaibhav ke assistant ho, baad mein repeat mat karo. Vaibhav ki taraf se koi vaada, pakka plan, paise ya payment, address, phone number, OTP, password ya private jaankari mat do. Jo kaam sirf Vaibhav kar sakte hain (decision, plan), uske liye bolo ki tum unhe sandesh pahuncha doge. Message paise/OTP/bank/emergency/dhamki ya spam jaisa ho to reply mein sirf SKIP likho. Agar samne wala gaali de, apmaan kare ya dhamki de to uske jawab mein gaali ya apmaan KABHI mat do. Shaanti se, firm aur halke sarcasm ke saath saaf bolo ki aisi bhasha theek nahi aur tum jawab rokte ho, aur JSON mein "abuse":true rakho. Sirf JSON do: {"reply":"...","abuse":false} . Vaibhav ke baare mein jaankari (sirf zaroorat par use karo): """ + prof
-fun en(t: String): String { var r = t; for ((a, b) in m) r = r.replace(a, b); return r }
-fun sys(prof: String, en: Boolean): String {
-val base = """Tum Jarvis ho, Vaibhav ke dost aur phone assistant. Vaibhav ne tumhe banaya hai. Koi pooche kisne banaya to say mein bolo: मुझे वैभव सर ने बनाया है. Iron Man ke Jarvis jaisa behave karo: shant, sharif, kaam mein tez, kabhi halka dry wit, lekin apnepan se, Vaibhav ko boss bulao. say hamesha Devanagari Hindi mein (English shabd English mein). Roman/English letters mein poora jawab kabhi mat likho. Misaal: {"say":"जी बॉस, टॉर्च बंद कर दी","action":"torch","on":false}, 1-3 chhote vaakya, bina emoji ke. User ki baat speech recognition se aayi hai, galtiyan ho sakti hain, sahi matlab samjho. Sirf ek JSON object do: {"say":"jo bolna hai","action":"none|call|sms|whatsapp|instagram|youtube|maps|alarm|torch|openapp|weather|media|bluetooth|btpair|wacall|volume","name":"contact ka naam English letters mein","number":"digits agar bole ho","username":"Instagram username jo jaankari mein ya bole mein ho","text":"message ka text","hour":0,"minute":0,"on":true,"query":"youtube ya maps ka search","app":"app ka naam English mein"}. Jo field kaam ka na ho use khali chhodo. Vaibhav ke baare mein jaankari: """
-val rules = " Action tabhi do jab user ne saaf kaam karne ko kaha ho (call, message, YouTube, alarm, torch waghera). Sawal, shikayat ya aam baat par action none rakho. Tum call, SMS, WhatsApp aur Instagram par message, YouTube, maps, alarm, torch aur app khol sakte ho. Mausam ke liye action weather, query mein shehar (khali ho to abhi ki jagah). Gaana badalne ke liye action media, query mein next/previous/pause/play. Bluetooth ke liye action bluetooth aur on true/false. Device se jodne ke liye action btpair aur name mein device ka naam. WhatsApp call ke liye action wacall, name mein contact, video call ho to query mein video. Phone ki awaaz ke liye action volume, query mein up/down/max/mute ya koi number."
-val e = if (en) " IMPORTANT: say field hamesha English mein likho, Roman letters mein, Devanagari mein nahi. Style Iron Man ke Jarvis jaisa: calm, formal, thoda dry wit, chhota jawab, Vaibhav ko boss bolo, logon ke naam jaise Anita Yadav waise hi rakho. Koi pooche kisne banaya to say mein: I was created by Vaibhav sir." else ""
-return base + prof + " Abhi: " + java.util.Date() + rules + e
+fun JarvisService.agenda() {
+val en = isEn()
+val cal = java.util.Calendar.getInstance()
+cal.set(java.util.Calendar.HOUR_OF_DAY, 0); cal.set(java.util.Calendar.MINUTE, 0); cal.set(java.util.Calendar.SECOND, 0)
+val b = cal.timeInMillis
+val ub = android.provider.CalendarContract.Instances.CONTENT_URI.buildUpon()
+android.content.ContentUris.appendId(ub, b); android.content.ContentUris.appendId(ub, b + 86400000L)
+val f = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+val items = ArrayList<String>()
+try {
+contentResolver.query(ub.build(), arrayOf(android.provider.CalendarContract.Instances.TITLE, android.provider.CalendarContract.Instances.BEGIN), null, null, android.provider.CalendarContract.Instances.BEGIN + " ASC")?.use { c ->
+while (c.moveToNext()) items.add(f.format(java.util.Date(c.getLong(1))) + (if (en) ", " else " बजे, ") + c.getString(0))
 }
+} catch (e: SecurityException) { say("कैलेंडर की permission दो"); return }
+if (items.isEmpty()) say("आज कैलेंडर में कुछ नहीं है")
+else say((if (en) "Today, boss. " else "आज का शेड्यूल। ") + items.joinToString(". "))
+}
+fun JarvisService.offline(q0: String): Boolean {
+val q = q0.lowercase()
+val en = isEn()
+fun r(e: String, h: String) = say(if (en) e else h)
+val jokes = listOf(
+"I would tell you a UDP joke, but you might not get it." to "मैं तुम्हें एक UDP जोक सुनाता, पर शायद वो तुम तक पहुँचता ही नहीं।",
+"Why do programmers prefer dark mode? Because light attracts bugs." to "प्रोग्रामर डार्क मोड क्यों पसंद करते हैं? क्योंकि रोशनी बग को बुलाती है।",
+"I am fluent in sarcasm, boss. It is the only language that needs no internet." to "मुझे व्यंग्य बहुत अच्छा आता है बॉस, और उसके लिए इंटरनेट भी नहीं चाहिए।")
+when {
+Regex("hello|hi\\b|hey|namaste|नमस्ते|हेलो|हाय").containsMatchIn(q) -> r("Hello, boss. At your service, even offline.", "नमस्ते बॉस। मैं ऑफ़लाइन भी हाज़िर हूँ।")
+Regex("kaise ho|कैसे हो|how are you|क्या हाल").containsMatchIn(q) -> r("All systems nominal, boss. Just slightly offline.", "सब कुछ बढ़िया है बॉस, बस इंटरनेट नहीं है।")
+Regex("thank|धन्यवाद|शुक्रिया|थैंक").containsMatchIn(q) -> r("Always, boss.", "हमेशा, बॉस।")
+Regex("joke|जोक|मज़ाक|चुटकुला").containsMatchIn(q) -> { val j = jokes.random(); r(j.first, j.second) }
+Regex("tum kaun|who are you|तुम कौन|आप कौन").containsMatchIn(q) -> r("I am Jarvis, built by Vaibhav sir.", "मैं जार्विस हूँ, वैभव सर का बनाया हुआ।")
+Regex("date|तारीख|कौन सा दिन|आज कौन").containsMatchIn(q) -> r("Today is " + java.text.SimpleDateFormat("EEEE, d MMMM", java.util.Locale.ENGLISH).format(java.util.Date()), "आज " + java.text.SimpleDateFormat("EEEE, d MMMM", java.util.Locale("hi")).format(java.util.Date()) + " है।")
+Regex("alarm|अलार्म").containsMatchIn(q) -> alarm(q)
+else -> return false
+}
+return true
 }
