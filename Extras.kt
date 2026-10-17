@@ -40,12 +40,12 @@ for ((u, a) in hist) { c.put(m("user", u)); c.put(m("model", a)) }
 c.put(m("user", q))
 val body = JSONObject().put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", sys))))
 .put("contents", c)
-.put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("maxOutputTokens", 1000).put("temperature", 0.6)).toString()
+.put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("maxOutputTokens", 700).put("temperature", 0.6)).toString()
 var err = ""
-for (md in (list(key) + listOf("gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-flash-lite")).distinct().take(4)) {
+for (md in (list(key) + listOf("gemini-flash-lite-latest", "gemini-flash-latest", "gemini-2.5-flash-lite")).distinct().take(3)) {
 try {
 val con = URL("https://generativelanguage.googleapis.com/v1beta/models/$md:generateContent").openConnection() as HttpURLConnection
-con.requestMethod = "POST"; con.connectTimeout = 10000; con.readTimeout = 25000; con.doOutput = true
+con.requestMethod = "POST"; con.connectTimeout = 6000; con.readTimeout = 12000; con.doOutput = true
 con.setRequestProperty("Content-Type", "application/json"); con.setRequestProperty("x-goog-api-key", key)
 con.outputStream.use { it.write(body.toByteArray()) }
 if (con.responseCode == 200) {
@@ -139,7 +139,7 @@ val raw = Gemini.call(k, Tr.rsys(prof), hist, "Bhejne wala: " + who + ". Message
 if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
 val jo = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { null }
 val r = jo?.optString("reply") ?: ""
-if (jo?.optBoolean("abuse") == true) { muted[id] = now + 3600000; JarvisService.inst?.alert(who) }
+if (jo?.optBoolean("abuse") == true) { muted[id] = now + 600000; JarvisService.inst?.alert(who) }
 if (r.isBlank() || r.contains("SKIP", true)) { JarvisService.lg("auto-reply skip: " + who); return@Thread }
 if (send(sbn, "(Jarvis, Vaibhav ka assistant) " + r)) {
 val l = chat.getOrPut(id) { ArrayList() }
@@ -168,6 +168,7 @@ override fun onAccessibilityEvent(e: AccessibilityEvent?) {
 val root = rootInActiveWindow ?: return
 val now = System.currentTimeMillis()
 if (e?.packageName?.toString() == "com.android.settings") { if (JarvisService.btWant != 0 && now - JarvisService.btAt < 30000) bt(root); return }
+if (e?.packageName?.toString() == "com.google.android.youtube") { if (getSharedPreferences("j", MODE_PRIVATE).getBoolean("ys", true)) skipAd(root); return }
 if (JarvisService.igText.isNotEmpty() && now - JarvisService.igAt < 25000 && e?.packageName?.toString() == "com.instagram.android") { ig(root); return }
 if (now - JarvisService.sendAt > 20000) return
 val n = findSend(root)
@@ -175,6 +176,18 @@ if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisServ
 else if (now - lastLog > 3000) { lastLog = now; JarvisService.lg("WA: send button nahi mila") }
 }
 private var lastBt = 0L
+private var lastSk = 0L
+private fun skipAd(root: AccessibilityNodeInfo) {
+val now = System.currentTimeMillis()
+if (now - lastSk < 500) return
+var n: AccessibilityNodeInfo? = root.findAccessibilityNodeInfosByViewId("com.google.android.youtube:id/skip_ad_button").firstOrNull()
+if (n == null) {
+val re = Regex("^skip( ad)?s?$|skip ad|विज्ञापन छोड़ें", RegexOption.IGNORE_CASE)
+n = root.findAccessibilityNodeInfosByText("Skip").firstOrNull { re.containsMatchIn((it.text?.toString() ?: "") + "") || re.containsMatchIn(it.contentDescription?.toString() ?: "") }
+}
+val c = up(n)
+if (c != null) { lastSk = now; c.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.lg("YT: ad skip") }
+}
 private fun up(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
 var p = n
 while (p != null && !p.isClickable) p = p.parent
