@@ -126,7 +126,7 @@ return null
 }
 fun JarvisService.call(s: String) {
 val name = s.replace(Regex("\\b(call|karo|kar|do|lagao|laga|ko|phone|please)\\b"), "").trim()
-val num = digits(s) ?: findNumber(name)
+val num = digits(s) ?: numByName(name)
 if (num == null) { say("$name कॉन्टैक्ट में नहीं मिला"); return }
 say("$name को कॉल लगा रहा हूँ")
 go(Intent(Intent.ACTION_CALL, Uri.parse("tel:$num")))
@@ -144,7 +144,7 @@ if (k > 0) { name = t.substring(0, k).trim(); body = t.substring(k + 4).trim() }
 else if (t.endsWith(" ko")) { name = t.removeSuffix(" ko"); body = "" }
 else { val p = t.split(" ", limit = 2); name = p[0]; body = p.getOrElse(1) { "" } }
 }
-val num = d ?: findNumber(name)
+val num = d ?: numByName(name)
 if (num == null) { say("$name कॉन्टैक्ट में नहीं मिला"); return }
 if ("whatsapp" in s) {
 val n = num.filter { it.isDigit() }
