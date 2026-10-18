@@ -121,7 +121,14 @@ if (text.isBlank()) { sk("khali"); return }
 if (text.startsWith("(Jarvis")) return
 if (who.firstOrNull()?.let { it == '+' || it.isDigit() } == true) { sk("number"); return }
 val k = sp.getString("key", "")?.trim().orEmpty()
-if (k.isEmpty()) { sk("key nahi"); return }
+if (k.isEmpty()) {
+val id0 = sbn.key ?: who
+val n0 = System.currentTimeMillis()
+if (n0 - (lastAt[id0] ?: 0L) < 3600000) return
+lastAt[id0] = n0
+if (send(sbn, "(Jarvis, Vaibhav ka assistant) Vaibhav abhi busy hain. Aapka message unhe mil gaya hai, wo jaldi jawab denge.")) JarvisService.lg("auto-reply (bina key) -> " + who)
+return
+}
 val id = sbn.key ?: who
 val now = System.currentTimeMillis()
 if (now < (muted[id] ?: 0L)) return
