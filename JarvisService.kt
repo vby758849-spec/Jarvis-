@@ -82,7 +82,7 @@ override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
-lg("Jarvis v37")
+lg("Jarvis v38")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
@@ -299,13 +299,13 @@ say("याद रख लिया")
 }
 private fun ask(q: String) {
 val key = sp.getString("key", "")?.trim().orEmpty()
-if (key.isEmpty()) { say("पहले ऐप में Gemini API key डालो"); return }
+if (key.isEmpty()) { if (!fallback(q)) say(if (isEn()) "I need a Gemini key to understand that, but I can still handle calls, messages, YouTube, alarms, weather and music." else "यह समझने के लिए Gemini key चाहिए। बिना key के मैं कॉल, मैसेज, यूट्यूब, अलार्म, मौसम और म्यूज़िक जैसे आसान काम कर सकता हूँ।"); return }
 val hh = ArrayList(hist)
 Thread {
 val sys = Tr.sys(sp.getString("prof", "") ?: "", isEn())
 val raw = Gemini.call(key, sys, hh, q)
 h.post {
-if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); if (!offline(q)) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, थोड़ी देर बाद फिर कोशिश करो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() } }
+if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); if (!fallback(q)) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, थोड़ी देर बाद फिर कोशिश करो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() } }
 else {
 lg("Gemini: " + raw)
 var jj: JSONObject? = null
@@ -357,4 +357,3 @@ fun go(i: Intent): Boolean = try {
 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
 } catch (e: Exception) { say("ये नहीं हो पाया"); false }
 }
-
