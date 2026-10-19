@@ -25,6 +25,7 @@ private val CY = Color.parseColor("#00E5FF")
 private val GR = Color.parseColor("#2BFF88")
 private val RD = Color.parseColor("#FF4D6D")
 private val DIM = Color.parseColor("#7A8FA3")
+private var greet: JarvisVoice? = null
 private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 private fun box(stroke: Int, fill: Int, r: Int) = GradientDrawable().apply {
 setColor(fill); setStroke(dp(1), stroke); cornerRadius = dp(r).toFloat()
@@ -95,6 +96,14 @@ setOnClickListener { st.visibility = if (st.visibility == View.GONE) View.VISIBL
 col.addView(head)
 col.addView(st)
 root.addView(ScrollView(this).apply { addView(col) }, FrameLayout.LayoutParams(-1, -1))
+if (b == null) {
+val intro = IronManIntroView(this) { root.post { root.removeViewAt(root.childCount - 1) } }
+intro.isClickable = true
+root.addView(intro, FrameLayout.LayoutParams(-1, -1))
+val gv = JarvisVoice(this)
+greet = gv
+gv.speak("नमस्ते सर, मैं जार्विस हूँ। All systems online.")
+}
 setContentView(root)
 val hh = Handler(Looper.getMainLooper())
 hh.post(object : Runnable {
@@ -114,6 +123,10 @@ logv.text = JarvisService.logs.joinToString("\n") { "› " + it }.ifEmpty { "›
 hh.postDelayed(this, 1000)
 }
 })
+}
+override fun onDestroy() {
+try { greet?.shutdown() } catch (e: Exception) { }
+super.onDestroy()
 }
 private fun ask() {
 if (perms.any { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }) requestPermissions(perms, 1)
