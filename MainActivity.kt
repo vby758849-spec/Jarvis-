@@ -98,37 +98,12 @@ col.addView(head)
 col.addView(st)
 root.addView(ScrollView(this).apply { addView(col) }, FrameLayout.LayoutParams(-1, -1))
 if (b == null) {
-val greetNow: () -> Unit = {
-val gv = JarvisVoice(this)
-greet = gv
-gv.speak("नमस्ते सर, मैं जार्विस हूँ। All systems online.")
-}
-val rid = resources.getIdentifier("intro", "raw", packageName)
-if (rid != 0) {
-val vv = VideoView(this)
-val vbox = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); isClickable = true }
-vbox.addView(vv, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
-root.addView(vbox, FrameLayout.LayoutParams(-1, -1))
-var over = false
-val finish: () -> Unit = {
-if (!over) {
-over = true
-try { vv.stopPlayback() } catch (e: Exception) { }
-vbox.animate().alpha(0f).setDuration(400).withEndAction { root.removeView(vbox) }.start()
-greetNow()
-}
-}
-vbox.setOnClickListener { finish() }
-vv.setOnCompletionListener { finish() }
-vv.setOnErrorListener { _, _, _ -> finish(); true }
-vv.setVideoURI(Uri.parse("android.resource://" + packageName + "/" + rid))
-vv.start()
-} else {
 val intro = IronManIntroView(this) { root.post { root.removeViewAt(root.childCount - 1) } }
 intro.isClickable = true
 root.addView(intro, FrameLayout.LayoutParams(-1, -1))
-greetNow()
-}
+val gv = JarvisVoice(this)
+greet = gv
+gv.speak("नमस्ते सर, मैं जार्विस हूँ। All systems online.")
 }
 setContentView(root)
 val hh = Handler(Looper.getMainLooper())
