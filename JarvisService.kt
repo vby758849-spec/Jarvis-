@@ -29,6 +29,8 @@ class JarvisService : Service(), RecognitionListener {
 private lateinit var sr: SpeechRecognizer
 private var tts: TextToSpeech? = null
 private var ttsReady = false
+private var hiV: android.speech.tts.Voice? = null
+private var enV: android.speech.tts.Voice? = null
 private val h = Handler(Looper.getMainLooper())
 private var awake = false
 private var tk = 0
@@ -46,7 +48,7 @@ companion object {
 val logs = java.util.concurrent.ConcurrentLinkedDeque<String>()
 fun lg(t: String) { logs.addLast(t.take(170)); while (logs.size > 22) logs.pollFirst() }
 }
-private fun dv(t: String) = if (t.count { it in 'A'..'z' } > t.length / 2) hi(t) else t
+private fun dv(t: String) = t
 private fun hi(t: String): String = try {
 if (Build.VERSION.SDK_INT >= 29 && t.any { it in 'A'..'z' }) android.icu.text.Transliterator.getInstance("Latin-Devanagari").transliterate(t) else t
 } catch (e: Exception) { t }
@@ -82,7 +84,7 @@ override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
-lg("Jarvis v38")
+lg("Jarvis v42")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
@@ -96,7 +98,7 @@ tts?.language = Locale("hi", "IN")
 applyVoice()
 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
 override fun onStart(id: String?) { speaking = true; vSvc?.setPause(true) }
-override fun onDone(id: String?) { speaking = false; vSvc?.setPause(false) }
+override fun onDone(id: String?) { if (id == "u") { speaking = false; vSvc?.setPause(false) } }
 @Deprecated("x") override fun onError(id: String?) { speaking = false }
 })
 ttsReady = true
@@ -124,7 +126,33 @@ val mx = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
 if (!sp.getBoolean("manvol", false) && am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) < mx * 0.7) am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (mx * 0.8).toInt(), 0)
 } catch (e: Exception) { }
 speaking = true
-tts?.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u")
+speakMixed(t)
+}
+private val segRe = Regex("[\\u0900-\\u097F][\\u0900-\\u097F\\s,।?!.]*|[^\\u0900-\\u097F]+")
+private fun speakMixed(t: String) {
+val tt = tts ?: return
+val hv = hiV
+val ev = enV
+if (isEn() || hv == null || ev == null) { tt.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u"); return }
+val segs = segRe.findAll(t).map { it.value.trim() }.filter { s -> s.any { it.isLetterOrDigit() } }.toList()
+if (segs.isEmpty()) { tt.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u"); return }
+segs.forEachIndexed { i, s ->
+val hin = s[0] in 'ऀ'..'ॿ'
+tt.setVoice(if (hin) hv else ev)
+tt.speak(s, if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, null, if (i == segs.lastIndex) "u" else "p" + i)
+}
+}
+private fun pickEn(): android.speech.tts.Voice? {
+val all = try { tts?.voices } catch (e: Exception) { null } ?: return null
+val c = all.filter { it.locale.language == "en" && !(it.features?.contains("notInstalled") ?: false) }
+val pref = Regex("gbb|gbd|rjs|enb|end")
+return c.sortedWith(compareBy(
+{ !(it.name.contains("male", true) && !it.name.contains("female", true)) },
+{ !pref.containsMatchIn(it.name) },
+{ !(it.locale.country == "IN" || it.locale.country == "GB") },
+{ it.isNetworkConnectionRequired },
+{ it.name }
+)).firstOrNull()
 }
 private fun setLang(l: String) {
 sp.edit().putString("lang", l).putInt("vk", 0).apply(); applyVoice()
@@ -288,9 +316,11 @@ val lang = tts?.voice?.locale?.language ?: ""
 var v = (tts?.voices ?: emptySet<android.speech.tts.Voice>()).filter { it.locale.language == lang }
 val uk = v.filter { it.locale == Locale.UK }
 if (en && uk.isNotEmpty()) v = uk
-v = v.sortedWith(compareBy({ !pref.containsMatchIn(it.name) }, { it.isNetworkConnectionRequired }, { it.name }))
+v = v.sortedWith(compareBy({ !(it.name.contains("male", true) && !it.name.contains("female", true)) }, { !pref.containsMatchIn(it.name) }, { it.isNetworkConnectionRequired }, { it.name }))
 if (v.isNotEmpty()) tts?.voice = v[sp.getInt("vk", 0) % v.size]
-lg("awaaz: " + tts?.voice?.name + " (" + v.size + " mili)")
+if (!en) hiV = tts?.voice
+if (enV == null) enV = pickEn()
+lg("awaaz: " + tts?.voice?.name + " (" + v.size + " mili) en=" + enV?.name)
 }
 private fun remember(s: String) {
 val fact = s.replace(Regex("^(yaad rakh|yaad rakho|remember|याद रख|याद रखो)( ki| that| कि)?"), "").trim()
