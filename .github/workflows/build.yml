@@ -239,9 +239,12 @@ jobs:
      echo uuid1 > app/src/main/assets/model-en/uuid
      mkdir -p app/src/main/java/com/vaibhav/jarvis
      cp *.kt app/src/main/java/com/vaibhav/jarvis/
+     mkdir -p app/src/main/res/raw
+     cp intro.mp4 app/src/main/res/raw/intro.mp4
   - run: gradle assembleDebug --no-daemon
   - uses: actions/upload-artifact@v4
     with:
      name: jarvis-apk
      path: app/build/outputs/apk/debug/app-debug.apk
+
      
