@@ -84,9 +84,10 @@ val st = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibil
 val key = field("Gemini API key (zaroori nahi, bina key ke bhi chalega)", sp.getString("key", "") ?: "", false)
 val pico = field("Picovoice AccessKey (ab zaroori nahi)", sp.getString("pico", "") ?: "", false)
 val prof = field("Mere baare mein", sp.getString("prof", DEF) ?: DEF, true)
-for (f in listOf(key, pico, prof)) st.addView(f, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+val igu = field("Tumhara Instagram username (bina @)", sp.getString("igu", "") ?: "", false)
+for (f in listOf(key, pico, igu, prof)) st.addView(f, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
 st.addView(neon("SAVE", CY) {
-sp.edit().putString("key", key.text.toString().trim()).putString("pico", pico.text.toString().trim()).putString("prof", prof.text.toString()).apply()
+sp.edit().putString("key", key.text.toString().trim()).putString("pico", pico.text.toString().trim()).putString("prof", prof.text.toString()).putString("igu", igu.text.toString().trim().removePrefix("@")).apply()
 Toast.makeText(this, "Save ho gaya", Toast.LENGTH_SHORT).show()
 }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
 val head = mono("⚙  SETTINGS  ▾", 12f, CY, true).apply {
@@ -97,12 +98,37 @@ col.addView(head)
 col.addView(st)
 root.addView(ScrollView(this).apply { addView(col) }, FrameLayout.LayoutParams(-1, -1))
 if (b == null) {
-val intro = IronManIntroView(this) { root.post { root.removeViewAt(root.childCount - 1) } }
-intro.isClickable = true
-root.addView(intro, FrameLayout.LayoutParams(-1, -1))
+val greetNow: () -> Unit = {
 val gv = JarvisVoice(this)
 greet = gv
 gv.speak("नमस्ते सर, मैं जार्विस हूँ। All systems online.")
+}
+val rid = resources.getIdentifier("intro", "raw", packageName)
+if (rid != 0) {
+val vv = VideoView(this)
+val vbox = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); isClickable = true }
+vbox.addView(vv, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+root.addView(vbox, FrameLayout.LayoutParams(-1, -1))
+var over = false
+val finish: () -> Unit = {
+if (!over) {
+over = true
+try { vv.stopPlayback() } catch (e: Exception) { }
+vbox.animate().alpha(0f).setDuration(400).withEndAction { root.removeView(vbox) }.start()
+greetNow()
+}
+}
+vbox.setOnClickListener { finish() }
+vv.setOnCompletionListener { finish() }
+vv.setOnErrorListener { _, _, _ -> finish(); true }
+vv.setVideoURI(Uri.parse("android.resource://" + packageName + "/" + rid))
+vv.start()
+} else {
+val intro = IronManIntroView(this) { root.post { root.removeViewAt(root.childCount - 1) } }
+intro.isClickable = true
+root.addView(intro, FrameLayout.LayoutParams(-1, -1))
+greetNow()
+}
 }
 setContentView(root)
 val hh = Handler(Looper.getMainLooper())
