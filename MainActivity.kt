@@ -26,6 +26,7 @@ private val GR = Color.parseColor("#2BFF88")
 private val RD = Color.parseColor("#FF4D6D")
 private val DIM = Color.parseColor("#7A8FA3")
 private var greet: JarvisVoice? = null
+private var tester: JarvisVoice? = null
 private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 private fun box(stroke: Int, fill: Int, r: Int) = GradientDrawable().apply {
 setColor(fill); setStroke(dp(1), stroke); cornerRadius = dp(r).toFloat()
@@ -90,6 +91,21 @@ st.addView(neon("SAVE", CY) {
 sp.edit().putString("key", key.text.toString().trim()).putString("pico", pico.text.toString().trim()).putString("prof", prof.text.toString()).putString("igu", igu.text.toString().trim().removePrefix("@")).apply()
 Toast.makeText(this, "Save ho gaya", Toast.LENGTH_SHORT).show()
 }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+val tv = JarvisVoice(this)
+tester = tv
+st.addView(neon("HINDI AWAAZ BADLO (SUNO)", CY) {
+sp.edit().putInt("hvi", sp.getInt("hvi", 0) + 1).apply()
+tv.reload()
+Toast.makeText(this, tv.hiName() + "  (" + tv.hiCount() + " mili)", Toast.LENGTH_LONG).show()
+tv.speak("नमस्ते सर, मैं जार्विस हूँ। यह मेरी आवाज़ है।")
+}, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+st.addView(neon("AWAAZ BHAARI KARO (SUNO)", CY) {
+val p = maxOf(0.4f, sp.getFloat("pt", 0.65f) - 0.1f)
+sp.edit().putFloat("pt", p).apply()
+Toast.makeText(this, "Pitch: " + p, Toast.LENGTH_SHORT).show()
+tv.speak("नमस्ते सर, मैं जार्विस हूँ। यह मेरी आवाज़ है।")
+}, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+st.addView(mono("Male awaaz mile to ruk jao, phir SHUTDOWN aur ACTIVATE dabao.", 10f, DIM, false).apply { setPadding(0, dp(8), 0, 0) })
 val head = mono("⚙  SETTINGS  ▾", 12f, CY, true).apply {
 setPadding(0, dp(18), 0, dp(4))
 setOnClickListener { st.visibility = if (st.visibility == View.GONE) View.VISIBLE else View.GONE }
@@ -127,6 +143,7 @@ hh.postDelayed(this, 1000)
 }
 override fun onDestroy() {
 try { greet?.shutdown() } catch (e: Exception) { }
+try { tester?.shutdown() } catch (e: Exception) { }
 super.onDestroy()
 }
 private fun ask() {
