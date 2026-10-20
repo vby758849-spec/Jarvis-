@@ -389,4 +389,23 @@ try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.i
 catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
 }
-"youtube" -> you
+
+"youtube" -> youtube("youtube " + j.optString("query"))
+"maps" -> { val q = j.optString("query"); say(q + " का रास्ता"); go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)))) }
+"alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")), tx)
+"agenda" -> agenda()
+"torch" -> torch(j.optBoolean("on", true))
+"openapp" -> openApp("open " + j.optString("app").lowercase())
+"weather" -> weather(j.optString("query"))
+"media" -> media(j.optString("query").lowercase())
+"bluetooth" -> bluetooth(j.optBoolean("on", true))
+"btpair" -> btPair(j.optString("name"))
+"wacall" -> waCall(j.optString("name"), j.optString("query").contains("video", true))
+"volume" -> volume(j.optString("query").lowercase())
+else -> say(j.optString("say"))
+}
+}
+fun go(i: Intent): Boolean = try {
+i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
+} catch (e: Exception) { say("ये नहीं हो पाया"); false }
+}
