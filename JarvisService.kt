@@ -84,7 +84,8 @@ override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
-lg("Jarvis v42")
+if (!sp.getBoolean("hi42", false)) sp.edit().putString("lang", "hi").putInt("vk", 0).putBoolean("hi42", true).apply()
+lg("Jarvis v43")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
@@ -261,7 +262,8 @@ sp.edit().putFloat("pt", minOf(1.2f, curPt() + 0.1f)).apply(); applyVoice()
 say("अब आवाज़ हल्की है")
 }
 Regex("awaaz badlo|awaz badlo|voice change|change voice|आवाज़ बदल|आवाज बदल").containsMatchIn(s) -> {
-sp.edit().putInt("vk", sp.getInt("vk", 0) + 1).apply(); applyVoice()
+if (isEn()) sp.edit().putInt("vk", sp.getInt("vk", 0) + 1).apply() else sp.edit().putInt("hvi", sp.getInt("hvi", 0) + 1).apply()
+applyVoice()
 say("ये मेरी नई आवाज़ है, पसंद आई?")
 }
 Regex("(कॉल|फोन|फ़ोन|call|phone).*(उठा|रिसीव|अटेंड|receive|utha|pick|attend)").containsMatchIn(s) -> callCtl(true)
@@ -289,10 +291,29 @@ val on = !Regex("band|बंद|बन्द|off|ऑफ|रोक").containsMatc
 sp.edit().putBoolean("ys", on).apply()
 say(if (on) "ऐड स्किप चालू" else "ऐड स्किप बंद")
 }
+Regex("insta|इंस्टा").containsMatchIn(s) && !Regex("bhej|भेज|send|likh|लिख").containsMatchIn(s) -> insta(s)
 Regex("schedule|शेड्यूल|कैलेंडर|calendar|agenda|एजेंडा|मीटिंग").containsMatchIn(s) -> agenda()
 Regex("कितने बजे|टाइम क्या|samay kya|time kya|what time|बजे हैं").containsMatchIn(s) -> say("अभी " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()) + " हुए हैं")
 else -> ask(s)
 }
+}
+private fun insta(s: String) {
+val pk = "com.instagram.android"
+fun open(u: String?): Boolean {
+val i = (if (u != null) Intent(Intent.ACTION_VIEW, Uri.parse(u)).setPackage(pk) else packageManager.getLaunchIntentForPackage(pk)) ?: return false
+return try { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true } catch (e: Exception) { false }
+}
+val me = sp.getString("igu", "")?.trim().orEmpty().removePrefix("@")
+val ok = when {
+Regex("inbox|इनबॉक्स|message|मैसेज|dm|डीएम").containsMatchIn(s) -> { say("इंस्टाग्राम इनबॉक्स खोल रहा हूँ"); open("instagram://direct_inbox") || open(null) }
+Regex("profile|प्रोफाइल|प्रोफ़ाइल").containsMatchIn(s) -> {
+if (me.isEmpty()) { say("सेटिंग्स में अपना इंस्टाग्राम यूज़रनेम डालो"); true }
+else { say("तुम्हारी प्रोफाइल खोल रहा हूँ"); open("instagram://user?username=" + me) || open(null) }
+}
+Regex("camera|कैमरा|story|स्टोरी|post|पोस्ट").containsMatchIn(s) -> { say("इंस्टाग्राम कैमरा खोल रहा हूँ"); open("instagram://camera") || open(null) }
+else -> { say("इंस्टाग्राम खोल रहा हूँ"); open(null) }
+}
+if (!ok) say("इंस्टाग्राम नहीं मिला")
 }
 fun alert(who: String) {
 h.post { say(if (isEn()) "Boss, " + who + " insulted you. I have replied and paused for ten minutes." else "बॉस, " + who + " ने आपकी बेइज़्ज़ती की। मैंने जवाब दे दिया और दस मिनट के लिए रोक दिया।") }
@@ -311,13 +332,13 @@ tts?.setPitch(curPt()); tts?.setSpeechRate(if (en) 0.95f else 1.05f)
 var r = tts?.setLanguage(if (en) Locale.UK else Locale("hi", "IN")) ?: -2
 if (en && r < 0) r = tts?.setLanguage(Locale("en", "IN")) ?: -2
 if (en && r < 0) tts?.setLanguage(Locale.US)
-val pref = Regex(if (en) "gbb|gbd|rjs" else "hic|hid")
+val pref = Regex(if (en) "gbb|gbd|rjs" else "hic|hid|hib")
 val lang = tts?.voice?.locale?.language ?: ""
-var v = (tts?.voices ?: emptySet<android.speech.tts.Voice>()).filter { it.locale.language == lang }
+var v = (tts?.voices ?: emptySet<android.speech.tts.Voice>()).filter { it.locale.language == lang && !(it.features?.contains("notInstalled") ?: false) }
 val uk = v.filter { it.locale == Locale.UK }
 if (en && uk.isNotEmpty()) v = uk
 v = v.sortedWith(compareBy({ !(it.name.contains("male", true) && !it.name.contains("female", true)) }, { !pref.containsMatchIn(it.name) }, { it.isNetworkConnectionRequired }, { it.name }))
-if (v.isNotEmpty()) tts?.voice = v[sp.getInt("vk", 0) % v.size]
+if (v.isNotEmpty()) tts?.voice = v[(if (en) sp.getInt("vk", 0) else sp.getInt("hvi", 0)) % v.size]
 if (!en) hiV = tts?.voice
 if (enV == null) enV = pickEn()
 lg("awaaz: " + tts?.voice?.name + " (" + v.size + " mili) en=" + enV?.name)
@@ -368,22 +389,4 @@ try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.i
 catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
 }
-"youtube" -> youtube("youtube " + j.optString("query"))
-"maps" -> { val q = j.optString("query"); say(q + " का रास्ता"); go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)))) }
-"alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")), tx)
-"agenda" -> agenda()
-"torch" -> torch(j.optBoolean("on", true))
-"openapp" -> openApp("open " + j.optString("app").lowercase())
-"weather" -> weather(j.optString("query"))
-"media" -> media(j.optString("query").lowercase())
-"bluetooth" -> bluetooth(j.optBoolean("on", true))
-"btpair" -> btPair(j.optString("name"))
-"wacall" -> waCall(j.optString("name"), j.optString("query").contains("video", true))
-"volume" -> volume(j.optString("query").lowercase())
-else -> say(j.optString("say"))
-}
-}
-fun go(i: Intent): Boolean = try {
-i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
-} catch (e: Exception) { say("ये नहीं हो पाया"); false }
-}
+"youtube" -> you
