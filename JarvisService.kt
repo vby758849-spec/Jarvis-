@@ -99,8 +99,8 @@ tts?.language = Locale("hi", "IN")
 applyVoice()
 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
 override fun onStart(id: String?) { speaking = true; vSvc?.setPause(true) }
-override fun onDone(id: String?) { if (id == "u") { speaking = false; vSvc?.setPause(false) } }
-@Deprecated("x") override fun onError(id: String?) { speaking = false }
+override fun onDone(id: String?) { if (id == "u") { speaking = false; vSvc?.setPause(false); h.post { unstyle() } } }
+@Deprecated("x") override fun onError(id: String?) { speaking = false; h.post { unstyle() } }
 })
 ttsReady = true
 }
@@ -120,7 +120,7 @@ fun isEn() = sp.getString("lang", "en") == "en"
 private fun curPt() = sp.getFloat("pt", if (isEn()) 0.85f else 0.65f)
 fun say(t0: String) {
 if (!ttsReady) return
-val t = if (isEn()) Tr.en(t0) else t0
+val t = if (isEn()) Tr.en(t0) else Pron.fix(t0)
 try {
 val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
 val mx = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
@@ -134,7 +134,10 @@ private fun speakMixed(t: String) {
 val tt = tts ?: return
 val hv = hiV
 val ev = enV
-if (isEn() || hv == null || ev == null) { tt.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u"); return }
+if (isEn() || hv == null || ev == null || sp.getBoolean("onevoice", true)) {
+if (!isEn() && hv != null) tt.setVoice(hv)
+tt.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u"); return
+}
 val segs = segRe.findAll(t).map { it.value.trim() }.filter { s -> s.any { it.isLetterOrDigit() } }.toList()
 if (segs.isEmpty()) { tt.speak(t, TextToSpeech.QUEUE_FLUSH, null, "u"); return }
 segs.forEachIndexed { i, s ->
@@ -291,11 +294,47 @@ val on = !Regex("band|बंद|बन्द|off|ऑफ|रोक").containsMatc
 sp.edit().putBoolean("ys", on).apply()
 say(if (on) "ऐड स्किप चालू" else "ऐड स्किप बंद")
 }
+Regex("mimicry|mimic|मिमिक्री|nakal|नकल").containsMatchIn(s) -> mimic(s)
 Regex("insta|इंस्टा").containsMatchIn(s) && !Regex("bhej|भेज|send|likh|लिख").containsMatchIn(s) -> insta(s)
 Regex("schedule|शेड्यूल|कैलेंडर|calendar|agenda|एजेंडा|मीटिंग").containsMatchIn(s) -> agenda()
 Regex("कितने बजे|टाइम क्या|samay kya|time kya|what time|बजे हैं").containsMatchIn(s) -> say("अभी " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()) + " हुए हैं")
 else -> ask(s)
 }
+}
+private var styled = false
+private fun sayStyled(t: String, pt: Float, rt: Float) {
+styled = true
+tts?.setPitch(pt.coerceIn(0.4f, 1.6f)); tts?.setSpeechRate(rt.coerceIn(0.7f, 1.4f))
+say(t)
+}
+private fun unstyle() {
+if (styled) { styled = false; tts?.setPitch(curPt()); tts?.setSpeechRate(if (isEn()) 0.95f else 1.05f) }
+}
+private val MIM = """Tum Jarvis ho. User kisi ki nakal (mimicry) karne ko keh raha hai. Sirf unke bolne ke andaaz, lahje aur mashhoor adaaon ki halki-fulki, harmless nakal karo. Asli awaaz ki copy nahi, sirf andaaz.
+Niyam: koi gaali, beizzati, rajneeti, dharm ya jhoota bayan us vyakti ke naam se nahi. Kisi nijee (private) insaan ya bachche ki nakal nahi. Lambe mashhoor dialogue ya gaane ki line nahi dohrani. 2 se 3 chhote vakya, Devanagari Hindi mein, English shabd bhi Devanagari mein likho.
+Agar nakal ke layak nahi to chhota sa shalin jawab do aur kisi mazedaar kirdaar (jaise purane zamane ka announcer) ki nakal karo.
+Sirf JSON: {"say":"...","pitch":0.4 se 1.6,"rate":0.7 se 1.4}. Bhaari awaaz ke liye pitch kam, patli ya bachche ki awaaz ke liye zyada."""
+private fun mimic(s: String) {
+if (Regex("band|बंद|रोक|stop|off").containsMatchIn(s)) { unstyle(); say("ठीक है, अब अपनी आवाज़ में बोलूँगा"); return }
+val pre: Triple<String, Float, Float>? = when {
+Regex("robot|रोबोट").containsMatchIn(s) -> Triple("मैं रोबोट हूँ। बीप बूप। आदेश दीजिए।", 0.5f, 0.85f)
+Regex("buddh|बूढ़|बुढ़|दादा|nana|नाना").containsMatchIn(s) -> Triple("अरे बेटा, हमारे ज़माने में तो सब पैदल चलते थे।", 0.55f, 0.8f)
+Regex("bachch|बच्च").containsMatchIn(s) -> Triple("मम्मी मम्मी, मुझे टॉफी चाहिए!", 1.5f, 1.15f)
+Regex("gussa|गुस्स").containsMatchIn(s) -> Triple("अरे! ये क्या बदतमीज़ी है! फिर से करो सब कुछ!", 0.6f, 1.25f)
+else -> null
+}
+if (pre != null) { sayStyled(pre.first, pre.second, pre.third); return }
+val key = sp.getString("key", "")?.trim().orEmpty()
+if (key.isEmpty()) { say("बिना Gemini key के मैं सिर्फ़ रोबोट, बूढ़ा, बच्चा या गुस्सैल की नकल कर सकता हूँ"); return }
+Thread {
+val raw = Gemini.call(key, MIM, ArrayList<Pair<String, String>>(), "Request: " + s)
+h.post {
+val j = try { JSONObject(raw!!.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { null }
+val tx = j?.optString("say")?.replace(Regex("[*#`_]"), "").orEmpty()
+if (j == null || tx.isEmpty()) say("नकल नहीं हो पाई, फिर कोशिश करो")
+else sayStyled(tx, j.optDouble("pitch", 0.65).toFloat(), j.optDouble("rate", 1.0).toFloat())
+}
+}.start()
 }
 private fun insta(s: String) {
 val pk = "com.instagram.android"
@@ -338,74 +377,4 @@ var v = (tts?.voices ?: emptySet<android.speech.tts.Voice>()).filter { it.locale
 val uk = v.filter { it.locale == Locale.UK }
 if (en && uk.isNotEmpty()) v = uk
 v = v.sortedWith(compareBy({ !(it.name.contains("male", true) && !it.name.contains("female", true)) }, { !pref.containsMatchIn(it.name) }, { it.isNetworkConnectionRequired }, { it.name }))
-if (v.isNotEmpty()) tts?.voice = v[(if (en) sp.getInt("vk", 0) else sp.getInt("hvi", 0)) % v.size]
-if (!en) hiV = tts?.voice
-if (enV == null) enV = pickEn()
-lg("awaaz: " + tts?.voice?.name + " (" + v.size + " mili) en=" + enV?.name)
-}
-private fun remember(s: String) {
-val fact = s.replace(Regex("^(yaad rakh|yaad rakho|remember|याद रख|याद रखो)( ki| that| कि)?"), "").trim()
-sp.edit().putString("prof", sp.getString("prof", "") + " " + fact + ".").apply()
-say("याद रख लिया")
-}
-private fun ask(q: String) {
-val key = sp.getString("key", "")?.trim().orEmpty()
-if (key.isEmpty()) { if (!fallback(q)) say(if (isEn()) "I need a Gemini key to understand that, but I can still handle calls, messages, YouTube, alarms, weather and music." else "यह समझने के लिए Gemini key चाहिए। बिना key के मैं कॉल, मैसेज, यूट्यूब, अलार्म, मौसम और म्यूज़िक जैसे आसान काम कर सकता हूँ।"); return }
-val hh = ArrayList(hist)
-Thread {
-val sys = Tr.sys(sp.getString("prof", "") ?: "", isEn())
-val raw = Gemini.call(key, sys, hh, q)
-h.post {
-if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); if (!fallback(q)) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, थोड़ी देर बाद फिर कोशिश करो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() } }
-else {
-lg("Gemini: " + raw)
-var jj: JSONObject? = null
-try { jj = JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { }
-val j = jj
-val sy = (j?.optString("say") ?: raw).replace(Regex("[*#`_]"), "")
-hist.add(q to sy); if (hist.size > 6) hist.removeAt(0)
-val a = j?.optString("action") ?: "none"
-if (j == null || a == "none" || a.isEmpty()) say(dv(sy)) else act(a, j)
-}
-}
-}.start()
-}
-private fun act(a: String, j: JSONObject) {
-lg("action: " + a + " " + j.optString("name") + j.optString("number") + j.optString("query") + j.optString("app"))
-val who = j.optString("number").ifEmpty { j.optString("name") }
-val tx = j.optString("text")
-when (a) {
-"call" -> call("call $who")
-"sms" -> if (tx.isEmpty()) say("क्या मैसेज भेजना है?") else msg("sms $who ko $tx")
-"whatsapp" -> msg("whatsapp $who ko $tx")
-"instagram" -> {
-val u = j.optString("username").trim().removePrefix("@")
-if (u.isEmpty() || tx.isEmpty()) say("किसे और क्या मैसेज भेजना है?")
-else {
-igText = tx; igAt = System.currentTimeMillis()
-say("$u को Instagram पर भेज रहा हूँ: $tx")
-val url = "https://ig.me/m/" + Uri.encode(u)
-try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.instagram.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-}
-}
-
-"youtube" -> youtube("youtube " + j.optString("query"))
-"maps" -> { val q = j.optString("query"); say(q + " का रास्ता"); go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)))) }
-"alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")), tx)
-"agenda" -> agenda()
-"torch" -> torch(j.optBoolean("on", true))
-"openapp" -> openApp("open " + j.optString("app").lowercase())
-"weather" -> weather(j.optString("query"))
-"media" -> media(j.optString("query").lowercase())
-"bluetooth" -> bluetooth(j.optBoolean("on", true))
-"btpair" -> btPair(j.optString("name"))
-"wacall" -> waCall(j.optString("name"), j.optString("query").contains("video", true))
-"volume" -> volume(j.optString("query").lowercase())
-else -> say(j.optString("say"))
-}
-}
-fun go(i: Intent): Boolean = try {
-i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
-} catch (e: Exception) { say("ये नहीं हो पाया"); false }
-}
+if (v.isNotEmpty()) tts?.voice = v[(if (en) sp.getInt("vk", 0) el
