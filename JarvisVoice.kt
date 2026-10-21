@@ -10,6 +10,22 @@ import java.util.Locale
  * Devanagari (हिंदी) hissa -> Hindi male voice
  * English (Latin) hissa   -> English male voice
  */
+/** English words ko Devanagari mein badalta hai, taaki Hindi awaaz unhe sahi bole. */
+object Pron {
+    private val map = mapOf(
+        "jarvis" to "जार्विस", "instagram" to "इंस्टाग्राम", "whatsapp" to "व्हाट्सऐप",
+        "youtube" to "यूट्यूब", "gemini" to "जेमिनी", "bluetooth" to "ब्लूटूथ",
+        "gmail" to "जीमेल", "telegram" to "टेलीग्राम", "google" to "गूगल",
+        "facebook" to "फेसबुक", "wifi" to "वाईफाई", "internet" to "इंटरनेट",
+        "online" to "ऑनलाइन", "offline" to "ऑफलाइन", "boss" to "बॉस", "torch" to "टॉर्च",
+        "ok" to "ओके", "okay" to "ओके", "volume" to "वॉल्यूम", "alarm" to "अलार्म",
+        "message" to "मैसेज", "call" to "कॉल", "system" to "सिस्टम", "systems" to "सिस्टम्स",
+        "all" to "ऑल", "hello" to "हेलो", "sir" to "सर", "notification" to "नोटिफिकेशन"
+    )
+    private val re = Regex("\\b(" + map.keys.joinToString("|") + ")\\b", RegexOption.IGNORE_CASE)
+    fun fix(t: String): String = re.replace(t) { map[it.value.lowercase()] ?: it.value }
+}
+
 class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : TextToSpeech.OnInitListener {
 
     private val sp = context.applicationContext.getSharedPreferences("j", Context.MODE_PRIVATE)
@@ -66,6 +82,12 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
 
     fun speak(text: String) {
         if (!ready) { pending.add(text); return }
+        if (sp.getBoolean("onevoice", true) && hiVoice != null) {
+            tts.setVoice(hiVoice)
+            tts.setPitch(pitch())
+            tts.speak(Pron.fix(text), TextToSpeech.QUEUE_FLUSH, null, "j" + System.nanoTime())
+            return
+        }
         var first = true
         for (m in part.findAll(text)) {
             val seg = m.value.trim()
