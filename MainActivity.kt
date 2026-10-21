@@ -59,8 +59,6 @@ super.onCreate(b)
 val sp = getSharedPreferences("j", MODE_PRIVATE)
 if (!sp.contains("prof")) sp.edit().putString("prof", DEF).apply()
 val root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02070D")) }
-val bgId = resources.getIdentifier("blueprint", "drawable", packageName)
-if (bgId != 0) root.addView(ImageView(this).apply { setImageResource(bgId); scaleType = ImageView.ScaleType.CENTER_CROP; alpha = 0.22f }, FrameLayout.LayoutParams(-1, -1))
 root.addView(GridBg(this), FrameLayout.LayoutParams(-1, -1))
 val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(40), dp(18), dp(28)) }
 col.addView(mono("J.A.R.V.I.S", 26f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.25f })
@@ -132,6 +130,16 @@ tv.reload()
 Toast.makeText(this, tv.hiName() + "  (" + tv.hiCount() + " mili)", Toast.LENGTH_LONG).show()
 tv.speak("नमस्ते सर, मैं जार्विस हूँ। यह मेरी आवाज़ है।")
 }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+val ov = neon("", CY) { }
+fun showOv() { ov.text = if (sp.getBoolean("onevoice", true)) "EK HI AWAAZ: ON (Hindi + English)" else "EK HI AWAAZ: OFF (alag alag)" }
+showOv()
+ov.setOnClickListener {
+sp.edit().putBoolean("onevoice", !sp.getBoolean("onevoice", true)).apply()
+showOv()
+tv.reload()
+tv.speak("नमस्ते सर, यह मेरी आवाज़ है। हेलो बॉस, सभी सिस्टम ऑनलाइन हैं।")
+}
+st.addView(ov, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
 val pl = mono("", 11f, Color.parseColor("#9FE8FF"), false).apply { setPadding(0, dp(14), 0, 0) }
 fun showPt(p: Float) { pl.text = "AWAAZ BHAARIPAN: " + String.format("%.2f", p) + "   (kam = bhaari, zyada = patli)" }
 val p0 = sp.getFloat("pt", 0.65f)
@@ -159,12 +167,32 @@ col.addView(head)
 col.addView(st)
 root.addView(ScrollView(this).apply { addView(col) }, FrameLayout.LayoutParams(-1, -1))
 if (b == null) {
+val sid = resources.getIdentifier("blueprint", "drawable", packageName)
+if (sid != 0) {
+val splash = ImageView(this).apply {
+setImageResource(sid); scaleType = ImageView.ScaleType.CENTER_CROP
+setBackgroundColor(Color.BLACK); isClickable = true; alpha = 0f
+}
+root.addView(splash, FrameLayout.LayoutParams(-1, -1))
+var gone = false
+val close: () -> Unit = {
+if (!gone) {
+gone = true
+splash.animate().cancel()
+splash.animate().alpha(0f).setDuration(600).withEndAction { root.removeView(splash) }.start()
+}
+}
+splash.setOnClickListener { close() }
+splash.animate().alpha(1f).setDuration(600).start()
+splash.postDelayed({ close() }, 3500)
+} else {
 val intro = IronManIntroView(this) { root.post { root.removeViewAt(root.childCount - 1) } }
 intro.isClickable = true
 root.addView(intro, FrameLayout.LayoutParams(-1, -1))
+}
 val gv = JarvisVoice(this)
 greet = gv
-gv.speak("नमस्ते सर, मैं जार्विस हूँ। All systems online.")
+gv.speak("नमस्ते सर, मैं जार्विस हूँ। सभी सिस्टम ऑनलाइन हैं।")
 }
 setContentView(root)
 val hh = Handler(Looper.getMainLooper())
