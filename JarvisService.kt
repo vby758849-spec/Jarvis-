@@ -377,4 +377,73 @@ var v = (tts?.voices ?: emptySet<android.speech.tts.Voice>()).filter { it.locale
 val uk = v.filter { it.locale == Locale.UK }
 if (en && uk.isNotEmpty()) v = uk
 v = v.sortedWith(compareBy({ !(it.name.contains("male", true) && !it.name.contains("female", true)) }, { !pref.containsMatchIn(it.name) }, { it.isNetworkConnectionRequired }, { it.name }))
-if (v.isNotEmpty()) tts?.voice = v[(if (en) sp.getInt("vk", 0) el
+if (v.isNotEmpty()) tts?.voice = v[(if (en) sp.getInt("vk", 0) else sp.getInt("hvi", 0)) % v.size]
+if (!en) hiV = tts?.voice
+if (enV == null) enV = pickEn()
+lg("awaaz: " + tts?.voice?.name + " (" + v.size + " mili) en=" + enV?.name)
+}
+private fun remember(s: String) {
+val fact = s.replace(Regex("^(yaad rakh|yaad rakho|remember|याद रख|याद रखो)( ki| that| कि)?"), "").trim()
+sp.edit().putString("prof", sp.getString("prof", "") + " " + fact + ".").apply()
+say("याद रख लिया")
+}
+private fun ask(q: String) {
+val key = sp.getString("key", "")?.trim().orEmpty()
+if (key.isEmpty()) { if (!fallback(q)) say(if (isEn()) "I need a Gemini key to understand that, but I can still handle calls, messages, YouTube, alarms, weather and music." else "यह समझने के लिए Gemini key चाहिए। बिना key के मैं कॉल, मैसेज, यूट्यूब, अलार्म, मौसम और म्यूज़िक जैसे आसान काम कर सकता हूँ।"); return }
+val hh = ArrayList(hist)
+Thread {
+val sys = Tr.sys(sp.getString("prof", "") ?: "", isEn())
+val raw = Gemini.call(key, sys, hh, q)
+h.post {
+if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); if (!fallback(q)) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, थोड़ी देर बाद फिर कोशिश करो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() } }
+else {
+lg("Gemini: " + raw)
+var jj: JSONObject? = null
+try { jj = JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { }
+val j = jj
+val sy = (j?.optString("say") ?: raw).replace(Regex("[*#`_]"), "")
+hist.add(q to sy); if (hist.size > 6) hist.removeAt(0)
+val a = j?.optString("action") ?: "none"
+if (j == null || a == "none" || a.isEmpty()) say(dv(sy)) else act(a, j)
+}
+}
+}.start()
+}
+private fun act(a: String, j: JSONObject) {
+lg("action: " + a + " " + j.optString("name") + j.optString("number") + j.optString("query") + j.optString("app"))
+val who = j.optString("number").ifEmpty { j.optString("name") }
+val tx = j.optString("text")
+when (a) {
+"call" -> call("call $who")
+"sms" -> if (tx.isEmpty()) say("क्या मैसेज भेजना है?") else msg("sms $who ko $tx")
+"whatsapp" -> msg("whatsapp $who ko $tx")
+"instagram" -> {
+val u = j.optString("username").trim().removePrefix("@")
+if (u.isEmpty() || tx.isEmpty()) say("किसे और क्या मैसेज भेजना है?")
+else {
+igText = tx; igAt = System.currentTimeMillis()
+say("$u को Instagram पर भेज रहा हूँ: $tx")
+val url = "https://ig.me/m/" + Uri.encode(u)
+try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.instagram.android").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+}
+}
+"youtube" -> youtube("youtube " + j.optString("query"))
+"maps" -> { val q = j.optString("query"); say(q + " का रास्ता"); go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)))) }
+"alarm" -> alarm("alarm " + j.optInt("hour") + ":" + String.format("%02d", j.optInt("minute")), tx)
+"agenda" -> agenda()
+"torch" -> torch(j.optBoolean("on", true))
+"openapp" -> openApp("open " + j.optString("app").lowercase())
+"weather" -> weather(j.optString("query"))
+"media" -> media(j.optString("query").lowercase())
+"bluetooth" -> bluetooth(j.optBoolean("on", true))
+"btpair" -> btPair(j.optString("name"))
+"wacall" -> waCall(j.optString("name"), j.optString("query").contains("video", true))
+"volume" -> volume(j.optString("query").lowercase())
+else -> say(j.optString("say"))
+}
+}
+fun go(i: Intent): Boolean = try {
+i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
+} catch (e: Exception) { say("ये नहीं हो पाया"); false }
+}
