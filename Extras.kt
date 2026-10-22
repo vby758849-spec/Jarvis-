@@ -3,6 +3,8 @@ import android.accessibilityservice.AccessibilityService
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
@@ -174,13 +176,37 @@ override fun onServiceConnected() { JarvisService.lg("Accessibility chalu") }
 override fun onAccessibilityEvent(e: AccessibilityEvent?) {
 val root = rootInActiveWindow ?: return
 val now = System.currentTimeMillis()
-if (e?.packageName?.toString() == "com.android.settings") { if (JarvisService.btWant != 0 && now - JarvisService.btAt < 30000) bt(root); return }
+if (e?.packageName?.toString() == "com.android.settings") { if (JarvisService.fsAt != 0L) { force(root, now); return }; if (JarvisService.btWant != 0 && now - JarvisService.btAt < 30000) bt(root); return }
 if (e?.packageName?.toString() == "com.google.android.youtube") { if (getSharedPreferences("j", MODE_PRIVATE).getBoolean("ys", true)) skipAd(root); return }
 if (JarvisService.igText.isNotEmpty() && now - JarvisService.igAt < 25000 && e?.packageName?.toString() == "com.instagram.android") { ig(root); return }
 if (now - JarvisService.sendAt > 20000) return
 val n = findSend(root)
 if (n != null) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.sendAt = 0L; JarvisService.lg("WA: send dabaya") }
 else if (now - lastLog > 3000) { lastLog = now; JarvisService.lg("WA: send button nahi mila") }
+}
+private var lastFs = 0L
+private fun force(root: AccessibilityNodeInfo, now: Long) {
+if (now - JarvisService.fsAt > 15000) { JarvisService.fsAt = 0L; return }
+if (JarvisService.fsStage == 1) {
+val ok = root.findAccessibilityNodeInfosByViewId("android:id/button1").firstOrNull()
+?: root.findAccessibilityNodeInfosByText("OK").firstOrNull() ?: root.findAccessibilityNodeInfosByText("ठीक है").firstOrNull()
+if (ok != null) { ok.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.lg("Band: confirm"); JarvisService.fsAt = 0L; JarvisService.fsStage = 0
+Handler(Looper.getMainLooper()).postDelayed({ performGlobalAction(GLOBAL_ACTION_HOME) }, 700) }
+return
+}
+if (now - lastFs < 800) return
+val re = Regex("force stop|जबरदस्ती रोकें|ज़बरदस्ती रोकें|जबरन रोकें|ज़बरन रोकें|बलपूर्वक रोकें|force close", RegexOption.IGNORE_CASE)
+val btn = root.findAccessibilityNodeInfosByViewId("com.android.settings:id/right_button").firstOrNull()
+?: root.findAccessibilityNodeInfosByText("Force stop").firstOrNull()
+?: root.findAccessibilityNodeInfosByText("जबरन रोकें").firstOrNull()
+if (btn == null || !re.containsMatchIn((btn.text?.toString() ?: "") + " " + (btn.contentDescription?.toString() ?: ""))) {
+lastFs = now; return
+}
+lastFs = now
+if (!btn.isEnabled) { JarvisService.lg("Band: app pehle se band"); JarvisService.fsAt = 0L; performGlobalAction(GLOBAL_ACTION_HOME); return }
+up(btn)?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+JarvisService.fsStage = 1
+JarvisService.lg("Band: Force stop dabaya")
 }
 private var lastBt = 0L
 private var lastSk = 0L

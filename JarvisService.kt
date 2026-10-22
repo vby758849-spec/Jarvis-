@@ -45,6 +45,8 @@ companion object {
 @Volatile var btWant = 0
 @Volatile var btAt = 0L
 @Volatile var btName = ""
+@Volatile var fsAt = 0L
+@Volatile var fsStage = 0
 val logs = java.util.concurrent.ConcurrentLinkedDeque<String>()
 fun lg(t: String) { logs.addLast(t.take(170)); while (logs.size > 22) logs.pollFirst() }
 }
@@ -95,13 +97,11 @@ override fun onCreate() {
 super.onCreate()
 inst = this
 if (!sp.getBoolean("hi42", false)) sp.edit().putString("lang", "hi").putInt("vk", 0).putBoolean("hi42", true).apply()
-lg("Jarvis v50")
+lg("Jarvis v51")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
-val stopPi = PendingIntent.getService(this, 7, Intent(this, JarvisService::class.java).setAction("STOP"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai").setContentText("Band karne ke liye BAND KARO dabao")
-.addAction(Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel), "BAND KARO", stopPi).build())
+val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai").setContentText("Band karne ke liye bolo: Jarvis band ho jao")
 .setSmallIcon(android.R.drawable.ic_btn_speak_now).build()
 if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
 else startForeground(1, n)
@@ -272,8 +272,26 @@ if (annWait) { annWait = false; if (YES.containsMatchIn(s)) say(lastMsg) }
 else handle(s)
 }
 }
+private val aliases = mapOf("यूट्यूब" to "youtube","यू ट्यूब" to "youtube","व्हाट्सऐप" to "whatsapp","व्हाट्सएप" to "whatsapp","वॉट्सऐप" to "whatsapp","इंस्टाग्राम" to "instagram","फेसबुक" to "facebook","गूगल" to "google","क्रोम" to "chrome","टेलीग्राम" to "telegram","जीमेल" to "gmail","स्नैपचैट" to "snapchat","नेटफ्लिक्स" to "netflix","स्पॉटिफाई" to "spotify","मैप्स" to "maps","कैमरा" to "camera","गैलरी" to "gallery","हॉटस्टार" to "hotstar","अमेज़न" to "amazon","फोनपे" to "phonepe","गूगल पे" to "google pay","ट्विटर" to "twitter","शेयरचैट" to "sharechat","मोज" to "moj")
+private val notApp = Regex("jarvis|जार्विस|torch|टॉर्च|टोर्च|bluetooth|ब्लूटूथ|auto|ऑटो|message|मैसेज|\\bad\\b|ऐड|wifi|वाईफाई|awaaz|आवाज|mimic|मिमिक्री|volume|वॉल्यूम|gaana|गाना|music|song")
+private fun closeApp(s: String): Boolean {
+val m = Regex("^(.+?)\\s*(band (karo|kro|kar do|kardo|kar de)|बंद (करो|कर दो|कर दे)|close( karo| kar do)?|kill)\\s*$").find(s) ?: return false
+val n0 = m.groupValues[1].replace(Regex("\\b(ko|app|ye|yeh|is|isko|abhi|please)\\b|को|ऐप्प|ऐप|इसको|अभी"), " ").replace(Regex("\\s+"), " ").trim()
+if (n0.isEmpty() || notApp.containsMatchIn(n0)) return false
+val n = aliases[n0] ?: n0
+val pm = packageManager
+val li = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0).filter { it.activityInfo.packageName != packageName }
+val hit = li.firstOrNull { it.loadLabel(pm).toString().lowercase() == n } ?: li.firstOrNull { it.loadLabel(pm).toString().lowercase().contains(n) } ?: return false
+val pk = hit.activityInfo.packageName
+say(n0 + " बंद कर रहा हूँ")
+fsAt = System.currentTimeMillis(); fsStage = 0
+lg("Band: " + pk)
+go(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + pk)))
+return true
+}
 private fun handle(s: String) {
 when {
+Regex("^.+\\s*(band (karo|kro|kar do|kardo|kar de)|बंद (करो|कर दो|कर दे)|close( karo| kar do)?|kill)\\s*$").containsMatchIn(s.trim()) && closeApp(s.trim()) -> {}
 Regex("kis ?ne (banaya|bnaya|banaaya|create)|किसने (तुम्हें |तुम्हे |तुमको )?बनाया|who (made|created|built) you").containsMatchIn(s) -> say("मुझे वैभव सर ने बनाया है")
 lastMsg.isNotEmpty() && (Regex("^(haan|han|yes|yeah|ji|padho|bolo|sunao)\\b").containsMatchIn(s) || Regex("^(हाँ|हां|पढ़ो|पढ़ दो|सुनाओ|बोलो)").containsMatchIn(s)) -> say(lastMsg)
 Regex("(message|msg|massage) ?(kya|padh|sunao)|kya (likha|message|msg)|padh ?do|padh ?ke sunao|read (the )?message|मैसेज (क्या|पढ़|सुना)|क्या (लिखा|मैसेज)|पढ़ के सुनाओ").containsMatchIn(s) -> say(if (lastMsg.isEmpty()) "कोई नया मैसेज नहीं है" else lastMsg)

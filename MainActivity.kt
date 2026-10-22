@@ -113,10 +113,6 @@ val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; set
 btns.addView(neon("▶  ACTIVATE", CY) { ask() }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(6), 0) })
 btns.addView(neon("■  SHUTDOWN", RD) { stopService(Intent(this, JarvisService::class.java)) }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(6), 0, 0, 0) })
 col.addView(btns)
-col.addView(neon("✕  APP BAND KARO", RD) {
-stopService(Intent(this, JarvisService::class.java))
-finishAffinity()
-}, LinearLayout.LayoutParams(-1, -2))
 val logHead = mono("// SYSTEM LOG", 10f, Color.parseColor("#5FA8B8"), false).apply { setPadding(0, dp(14), 0, dp(4)) }
 val logv = mono("", 11f, Color.parseColor("#9FE8FF"), false).apply {
 setPadding(dp(12), dp(10), dp(12), dp(10)); background = box(Color.parseColor("#12394A"), Color.parseColor("#04101A"), 12)
