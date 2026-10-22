@@ -235,6 +235,10 @@ sec("JAAGNA AUR SUNNA")
 tgl("shaant mode reels movie video media apne aap bolna chup शांत", "calm", true, "SHAANT MODE (reels/movie mein na jaage)")
 tgl("message batana notification announce बताना", "an", true, "MESSAGE AANE PAR BATANA")
 
+sec("APP UPDATE")
+add("update naya version check download install अपडेट", neon("UPDATE CHECK KARO", CY) { Updater.check(this, true) })
+add("version build update", mono("Abhi ka build: " + Updater.cur(this), 11f, Color.parseColor("#9FE8FF"), false))
+
 sec("DIKHAVA")
 tgl("system log dikhao chhupao लॉग", "showlog", false, "SYSTEM LOG DIKHAO") {
 val on = sp.getBoolean("showlog", false)
@@ -314,6 +318,7 @@ splash.postDelayed({ close() }, 4300)
 vc().speak("नमस्ते सर, मैं जार्विस हूँ। सभी सिस्टम ऑनलाइन हैं।")
 }
 setContentView(root)
+if (b == null) hh.postDelayed({ Updater.check(this, false) }, 4500)
 tick = object : Runnable {
 override fun run() {
 val en = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: ""
