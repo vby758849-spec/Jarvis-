@@ -97,7 +97,7 @@ override fun onCreate() {
 super.onCreate()
 inst = this
 if (!sp.getBoolean("hi42", false)) sp.edit().putString("lang", "hi").putInt("vk", 0).putBoolean("hi42", true).apply()
-lg("Jarvis v51")
+lg("Jarvis v53")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
@@ -140,6 +140,11 @@ val mx = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
 if (!sp.getBoolean("manvol", false) && am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) < mx * 0.7) am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (mx * 0.8).toInt(), 0)
 } catch (e: Exception) { }
 speaking = true
+if (CloneVoice.active(sp)) {
+vSvc?.setPause(true)
+CloneVoice.speak(this, sp, if (isEn()) t else t0, { speaking = false; vSvc?.setPause(false); h.post { unstyle() } }, { speakMixed(t) })
+return
+}
 speakMixed(t)
 }
 private val segRe = Regex("[\\u0900-\\u097F][\\u0900-\\u097F\\s,।?!.]*|[^\\u0900-\\u097F]+")
@@ -284,8 +289,15 @@ val li = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.
 val hit = li.firstOrNull { it.loadLabel(pm).toString().lowercase() == n } ?: li.firstOrNull { it.loadLabel(pm).toString().lowercase().contains(n) } ?: return false
 val pk = hit.activityInfo.packageName
 say(n0 + " बंद कर रहा हूँ")
-fsAt = System.currentTimeMillis(); fsStage = 0
 lg("Band: " + pk)
+if (checkSelfPermission("android.permission.KILL_BACKGROUND_PROCESSES") == PackageManager.PERMISSION_GRANTED) {
+fsAt = 0L
+go(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
+val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+for (d in longArrayOf(900, 2500, 5000)) h.postDelayed({ try { am.killBackgroundProcesses(pk) } catch (e: Exception) { } }, d)
+return true
+}
+fsAt = System.currentTimeMillis(); fsStage = 0
 go(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + pk)))
 return true
 }

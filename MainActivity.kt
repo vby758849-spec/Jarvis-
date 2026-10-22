@@ -1,6 +1,7 @@
 package com.vaibhav.jarvis
 import android.Manifest.permission.*
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -31,6 +32,8 @@ private val RD = Color.parseColor("#FF4D6D")
 private val DIM = Color.parseColor("#7A8FA3")
 private val SAMPLE = "नमस्ते सर, मैं जार्विस हूँ। यह मेरी आवाज़ है।"
 private var voice: JarvisVoice? = null
+private var xikF: EditText? = null
+private var cvLab: TextView? = null
 private val hh = Handler(Looper.getMainLooper())
 private var tick: Runnable? = null
 private fun vc(): JarvisVoice { val v = voice ?: JarvisVoice(this); voice = v; return v }
@@ -98,21 +101,21 @@ iv.postDelayed(this, 4000)
 }, 4000)
 }
 }
+val panel = col
 val reactor = ReactorView(this)
 reactor.setOnClickListener { toggle() }
-col.addView(reactor, LinearLayout.LayoutParams(dp(230), dp(230)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(18) })
 val status = mono("OFFLINE", 14f, DIM, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.3f; setPadding(0, dp(10), 0, dp(10)) }
-col.addView(status)
+panel.addView(status)
 val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
 val cN = mono("NOTIF", 11f, Color.WHITE, true).apply { setPadding(dp(10), dp(6), dp(10), dp(6)) }
 val cA = mono("ACCESS", 11f, Color.WHITE, true).apply { setPadding(dp(10), dp(6), dp(10), dp(6)) }
 val cR = mono("AUTO-REPLY", 11f, Color.WHITE, true).apply { setPadding(dp(10), dp(6), dp(10), dp(6)) }
 for (c in listOf(cN, cA, cR)) chips.addView(c, LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(4), 0, dp(4), 0) })
-col.addView(chips)
+panel.addView(chips)
 val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(16), 0, dp(8)) }
 btns.addView(neon("▶  ACTIVATE", CY) { ask() }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(6), 0) })
 btns.addView(neon("■  SHUTDOWN", RD) { stopService(Intent(this, JarvisService::class.java)) }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(6), 0, 0, 0) })
-col.addView(btns)
+panel.addView(btns)
 val logHead = mono("// SYSTEM LOG", 10f, Color.parseColor("#5FA8B8"), false).apply { setPadding(0, dp(14), 0, dp(4)) }
 val logv = mono("", 11f, Color.parseColor("#9FE8FF"), false).apply {
 setPadding(dp(12), dp(10), dp(12), dp(10)); background = box(Color.parseColor("#12394A"), Color.parseColor("#04101A"), 12)
@@ -120,8 +123,8 @@ setPadding(dp(12), dp(10), dp(12), dp(10)); background = box(Color.parseColor("#
 val showLog = { sp.getBoolean("showlog", false) }
 logHead.visibility = if (showLog()) View.VISIBLE else View.GONE
 logv.visibility = if (showLog()) View.VISIBLE else View.GONE
-col.addView(logHead)
-col.addView(logv)
+panel.addView(logHead)
+panel.addView(logv)
 
 val st = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
 val items = ArrayList<Pair<String, View>>()
@@ -161,13 +164,13 @@ bt.setOnClickListener { sp.edit().putBoolean(pk, !sp.getBoolean(pk, def)).apply(
 add(keys, bt)
 }
 
-sec("KHAATA (chhupa hua)")
-val key = field("Gemini API key", sp.getString("key", "") ?: "", true)
-val igu = field("Instagram username (bina @)", sp.getString("igu", "") ?: "", true)
+sec("KHAATA")
+val key = field("Gemini API key", sp.getString("key", "") ?: "", false)
+val igu = field("Instagram username (bina @)", sp.getString("igu", "") ?: "", false)
 add("gemini key api jemini chabi चाबी", key)
 add("instagram insta username इंस्टा", igu)
 add("save सेव", neon("SAVE", CY) {
-sp.edit().putString("key", key.text.toString().trim()).putString("igu", igu.text.toString().trim().removePrefix("@")).apply()
+sp.edit().putString("xik", (xikF?.text?.toString() ?: sp.getString("xik", "") ?: "").trim()).putString("key", key.text.toString().trim()).putString("igu", igu.text.toString().trim().removePrefix("@")).apply()
 Toast.makeText(this, "Save ho gaya", Toast.LENGTH_SHORT).show()
 })
 add("jaankari details privacy mitao delete profile meri जानकारी", neon("MERI JAANKARI MITAO", RD) {
@@ -208,6 +211,26 @@ pre.addView(neon("PATLI", CY) { sp.edit().putFloat("pt", 0.95f).putFloat("rt", 1
 add("preset gambhir normal patli bhaari awaaz style", pre)
 tgl("auto volume badhana awaaz volume वॉल्यूम", "manvol", false, "AUTO VOLUME BADHANA", true)
 
+sec("NAKAL AWAAZ (kisi ki clip se)")
+val xik = field("ElevenLabs API key (clone ke liye)", sp.getString("xik", "") ?: "", false)
+xikF = xik
+add("clone clip voice nakal awaaz elevenlabs key kisi ki awaaz क्लोन", xik)
+val cl = mono("", 11f, Color.parseColor("#9FE8FF"), false).apply { setPadding(0, dp(4), 0, 0) }
+cvLab = cl
+cl.text = if (sp.getString("cvid", "").isNullOrEmpty()) "Clone awaaz: koi nahi" else "Clone awaaz: " + (sp.getString("cvn", "") ?: "") + " (taiyaar)"
+add("clone clip voice nakal awaaz status", cl)
+add("clip chuno upload audio awaaz clone voice sample क्लोन", neon("AWAAZ CLIP CHUNO (UPLOAD)", CY) {
+sp.edit().putString("xik", xik.text.toString().trim()).apply()
+if (xik.text.toString().trim().isEmpty()) { Toast.makeText(this, "Pehle ElevenLabs key daalo", Toast.LENGTH_LONG).show() }
+else startActivityForResult(Intent.createChooser(Intent(Intent.ACTION_GET_CONTENT).setType("audio/*").addCategory(Intent.CATEGORY_OPENABLE), "Awaaz ki clip chuno"), 77)
+})
+tgl("clone awaaz on off chalu band", "cv", true, "CLONE AWAAZ")
+add("clone hatao delete awaaz voice", neon("CLONE AWAAZ HATAO", RD) {
+sp.edit().remove("cvid").remove("cvn").apply()
+cl.text = "Clone awaaz: koi nahi"
+Toast.makeText(this, "Clone hata diya, ab normal awaaz", Toast.LENGTH_SHORT).show()
+})
+
 sec("JAAGNA AUR SUNNA")
 tgl("shaant mode reels movie video media apne aap bolna chup शांत", "calm", true, "SHAANT MODE (reels/movie mein na jaage)")
 tgl("message batana notification announce बताना", "an", true, "MESSAGE AANE PAR BATANA")
@@ -240,10 +263,10 @@ if (ok && k != "\u0000") n++
 none.visibility = if (s.isNotEmpty() && n == 0) View.VISIBLE else View.GONE
 }
 })
-col.addView(head)
-col.addView(q, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
-col.addView(none)
-col.addView(st)
+panel.addView(head)
+panel.addView(q, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+panel.addView(none)
+panel.addView(st)
 root.addView(ScrollView(this).apply { addView(col) }, FrameLayout.LayoutParams(-1, -1))
 
 if (b == null) {
@@ -287,10 +310,6 @@ window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
 }
 splash.setOnClickListener { close() }
 splash.postDelayed({ close() }, 4300)
-} else {
-val intro = IronManIntroView(this) { root.post { root.removeViewAt(root.childCount - 1) } }
-intro.isClickable = true
-root.addView(intro, FrameLayout.LayoutParams(-1, -1))
 }
 vc().speak("नमस्ते सर, मैं जार्विस हूँ। सभी सिस्टम ऑनलाइन हैं।")
 }
@@ -325,6 +344,34 @@ override fun onDestroy() {
 tick?.let { hh.removeCallbacks(it) }
 try { voice?.shutdown() } catch (e: Exception) { }
 super.onDestroy()
+}
+override fun onActivityResult(rq: Int, rs: Int, d: Intent?) {
+super.onActivityResult(rq, rs, d)
+val u = d?.data
+if (rq != 77 || rs != RESULT_OK || u == null) return
+val sp = getSharedPreferences("j", MODE_PRIVATE)
+AlertDialog.Builder(this).setTitle("Ijazat zaroori hai")
+.setMessage("Ye clip sirf tumhari apni awaaz ki ho, ya us insaan ki jisne ijazat di ho. Kya aisa hi hai?")
+.setNegativeButton("Nahi", null)
+.setPositiveButton("Haan, ijazat hai") { _, _ ->
+val key = sp.getString("xik", "") ?: ""
+val bytes = try { contentResolver.openInputStream(u)?.use { it.readBytes() } } catch (e: Exception) { null }
+if (bytes == null || bytes.isEmpty()) { Toast.makeText(this, "Clip padh nahi payi", Toast.LENGTH_LONG).show() }
+else if (bytes.size > 10 * 1024 * 1024) { Toast.makeText(this, "Clip 10MB se choti chuno (1-2 minute kaafi hai)", Toast.LENGTH_LONG).show() }
+else {
+cvLab?.text = "Clone ban raha hai..."
+val nm = "Jarvis-" + (System.currentTimeMillis() / 1000)
+CloneVoice.create(key, nm, bytes, "clip.mp3") { id, msg ->
+if (id != null) {
+sp.edit().putString("cvid", id).putString("cvn", nm).putBoolean("cv", true).apply()
+cvLab?.text = "Clone awaaz: " + nm + " (taiyaar)"
+Toast.makeText(this, "Clone ban gaya. SHUTDOWN phir ACTIVATE dabao", Toast.LENGTH_LONG).show()
+} else {
+cvLab?.text = "Clone nahi bana: " + msg
+}
+}
+}
+}.show()
 }
 private fun ask() {
 if (perms.any { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }) requestPermissions(perms, 1)
