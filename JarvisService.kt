@@ -66,30 +66,42 @@ app.contains("gmail", true) -> "जीमेल"
 app.contains("messag", true) || app.contains("sms", true) -> "मैसेज"
 else -> app
 }
+if (calm()) return
 val g = if (group.isEmpty()) "" else group + " ग्रुप में "
 h.post {
 if (isEn()) say("Boss, " + who + " messaged you on " + app + (if (group.isEmpty()) "" else " in " + group) + ". Shall I read it?")
 else say("बॉस, " + who + " का " + ap + " पर " + g + "मैसेज आया है, पढ़ूँ?")
+annWait = true
 h.postDelayed({ wakeHit(true) }, 3500)
+h.postDelayed({ annWait = false }, 9000)
 }
 }
 private val sp by lazy { getSharedPreferences("j", Context.MODE_PRIVATE) }
 private val hist = ArrayList<Pair<String, String>>()
 @Volatile private var speaking = false
-private val wake = Regex("jarvis|jarvish|travis|jar vis|jarwis|darvis|charvis|harvis|service|जार्विस|जारविस|जर्विस|जार्वीस|जारवीस|जरविस|ज़ार्विस|डार्विस|चार्विस|जार्विश")
+private val wake = Regex("jarvis|jarvish|jar vis|jarwis|जार्विस|जारविस|जर्विस|जार्वीस|जारवीस|जरविस|ज़ार्विस|जार्विश")
+private var annWait = false
+private val YES = Regex("^(haan|han|yes|yeah|ji|padho|bolo|sunao|हाँ|हां|जी|पढ़ो|पढ़ दो|सुनाओ|बोलो)")
+private fun playing(): Boolean = try { (getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager).isMusicActive } catch (e: Exception) { false }
+private fun calm(): Boolean = sp.getBoolean("calm", true) && playing()
 private var LANG = "hi-IN"
 private var off = false
 override fun onBind(i: Intent?): IBinder? = null
-override fun onStartCommand(i: Intent?, f: Int, id: Int) = START_STICKY
+override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
+if (i?.action == "STOP") { stopSelf(); return START_NOT_STICKY }
+return START_STICKY
+}
 override fun onCreate() {
 super.onCreate()
 inst = this
 if (!sp.getBoolean("hi42", false)) sp.edit().putString("lang", "hi").putInt("vk", 0).putBoolean("hi42", true).apply()
-lg("Jarvis v43")
+lg("Jarvis v50")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
-val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai")
+val stopPi = PendingIntent.getService(this, 7, Intent(this, JarvisService::class.java).setAction("STOP"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai").setContentText("Band karne ke liye BAND KARO dabao")
+.addAction(Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel), "BAND KARO", stopPi).build())
 .setSmallIcon(android.R.drawable.ic_btn_speak_now).build()
 if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
 else startForeground(1, n)
@@ -118,6 +130,7 @@ super.onDestroy()
 }
 fun isEn() = sp.getString("lang", "en") == "en"
 private fun curPt() = sp.getFloat("pt", if (isEn()) 0.85f else 0.65f)
+private fun curRt() = sp.getFloat("rt", if (isEn()) 0.95f else 1.05f)
 fun say(t0: String) {
 if (!ttsReady) return
 val t = if (isEn()) Tr.en(t0) else Pron.fix(t0)
@@ -194,7 +207,10 @@ try {
 val a = JSONObject(j).optJSONArray("result") ?: return
 for (i in 0 until a.length()) {
 val o = a.getJSONObject(i)
-if (o.optString("word") in listOf("jarvis", "travis") && o.optDouble("conf", 0.0) >= 0.85) { h.post { wakeHit(false) }; return }
+if (o.optString("word") == "jarvis" && o.optDouble("conf", 0.0) >= (if (playing()) 0.97 else 0.9)) {
+if (calm()) { lg("shaant mode: media chal raha hai, nahi jaaga"); return }
+h.post { wakeHit(false) }; return
+}
 }
 } catch (e: Exception) { }
 }
@@ -203,7 +219,7 @@ val sv = vSvc ?: return
 vSvc = null
 lg("wake: Jarvis suna")
 try { sv.stop(); sv.shutdown() } catch (e: Exception) { }
-stayAwake(20000)
+stayAwake(if (quiet) 7000 else 10000)
 if (!quiet) say("जी बॉस?")
 h.postDelayed({ listen() }, 60)
 }
@@ -243,13 +259,18 @@ override fun onEndOfSpeech() {}
 override fun onPartialResults(p: Bundle?) {}
 override fun onEvent(t: Int, p: Bundle?) {}
 private fun process(s: String) {
+if (!awake && calm()) return
 lg("सुना: " + s)
 val m = wake.find(s)
 if (m != null) {
 val rest = s.substring(m.range.last + 1).trim()
 if (rest.isNotEmpty()) handle(rest)
-else { say("जी बॉस?"); h.postDelayed({ stayAwake(20000) }, 1500) }
-} else if (awake) { awake = false; tk++; handle(s) }
+else { say("जी बॉस?"); h.postDelayed({ stayAwake(10000) }, 1500) }
+} else if (awake) {
+awake = false; tk++
+if (annWait) { annWait = false; if (YES.containsMatchIn(s)) say(lastMsg) }
+else handle(s)
+}
 }
 private fun handle(s: String) {
 when {
@@ -294,6 +315,7 @@ val on = !Regex("band|बंद|बन्द|off|ऑफ|रोक").containsMatc
 sp.edit().putBoolean("ys", on).apply()
 say(if (on) "ऐड स्किप चालू" else "ऐड स्किप बंद")
 }
+Regex("band ho ?ja|बंद हो ?जा|apne aap ko band|अपने आप को बंद|shut ?down|शट ?डाउन|app band|ऐप बंद|exit").containsMatchIn(s) -> { say("ठीक है सर, बंद हो रहा हूँ"); h.postDelayed({ stopSelf() }, 2500) }
 Regex("mimicry|mimic|मिमिक्री|nakal|नकल").containsMatchIn(s) -> mimic(s)
 Regex("insta|इंस्टा").containsMatchIn(s) && !Regex("bhej|भेज|send|likh|लिख").containsMatchIn(s) -> insta(s)
 Regex("schedule|शेड्यूल|कैलेंडर|calendar|agenda|एजेंडा|मीटिंग").containsMatchIn(s) -> agenda()
@@ -308,7 +330,7 @@ tts?.setPitch(pt.coerceIn(0.4f, 1.6f)); tts?.setSpeechRate(rt.coerceIn(0.7f, 1.4
 say(t)
 }
 private fun unstyle() {
-if (styled) { styled = false; tts?.setPitch(curPt()); tts?.setSpeechRate(if (isEn()) 0.95f else 1.05f) }
+if (styled) { styled = false; tts?.setPitch(curPt()); tts?.setSpeechRate(curRt()) }
 }
 private val MIM = """Tum Jarvis ho. User kisi ki nakal (mimicry) karne ko keh raha hai. Sirf unke bolne ke andaaz, lahje aur mashhoor adaaon ki halki-fulki, harmless nakal karo. Asli awaaz ki copy nahi, sirf andaaz.
 Niyam: koi gaali, beizzati, rajneeti, dharm ya jhoota bayan us vyakti ke naam se nahi. Kisi nijee (private) insaan ya bachche ki nakal nahi. Lambe mashhoor dialogue ya gaane ki line nahi dohrani. 2 se 3 chhote vakya, Devanagari Hindi mein, English shabd bhi Devanagari mein likho.
@@ -367,7 +389,7 @@ else if (Build.VERSION.SDK_INT >= 28) { tm.endCall(); lg("call kaata"); say("क
 }
 private fun applyVoice() {
 val en = isEn()
-tts?.setPitch(curPt()); tts?.setSpeechRate(if (en) 0.95f else 1.05f)
+tts?.setPitch(curPt()); tts?.setSpeechRate(curRt())
 var r = tts?.setLanguage(if (en) Locale.UK else Locale("hi", "IN")) ?: -2
 if (en && r < 0) r = tts?.setLanguage(Locale("en", "IN")) ?: -2
 if (en && r < 0) tts?.setLanguage(Locale.US)

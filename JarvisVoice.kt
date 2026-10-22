@@ -39,13 +39,14 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
     private val part = Regex("[\\u0900-\\u097F][\\u0900-\\u097F\\s,।?!.]*|[^\\u0900-\\u097F]+")
 
     private fun pitch() = sp.getFloat("pt", 0.65f)
+    private fun rate() = sp.getFloat("rt", 1.05f)
 
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) return
         hiVoice = pickMale("hi", Regex("hic|hid|hib"), null, sp.getInt("hvi", 0))
-        enVoice = pickMale("en", Regex("gbb|gbd|rjs|enb|end"), "IN", 0)
+        enVoice = pickMale("en", Regex("gbb|gbd|rjs|enb|end"), "IN", sp.getInt("vk", 0))
         tts.setPitch(pitch())
-        tts.setSpeechRate(1.0f)
+        tts.setSpeechRate(rate())
         ready = true
         pending.forEach { speak(it) }
         pending.clear()
@@ -72,7 +73,10 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
     fun reload() {
         if (!ready) return
         hiVoice = pickMale("hi", Regex("hic|hid|hib"), null, sp.getInt("hvi", 0))
+        enVoice = pickMale("en", Regex("gbb|gbd|rjs|enb|end"), "IN", sp.getInt("vk", 0))
     }
+
+    fun enName(): String = enVoice?.name ?: "koi English voice nahi mili"
 
     fun hiName(): String = hiVoice?.name ?: "koi Hindi voice nahi mili"
 
@@ -85,6 +89,7 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
         if (sp.getBoolean("onevoice", true) && hiVoice != null) {
             tts.setVoice(hiVoice)
             tts.setPitch(pitch())
+            tts.setSpeechRate(rate())
             tts.speak(Pron.fix(text), TextToSpeech.QUEUE_FLUSH, null, "j" + System.nanoTime())
             return
         }
@@ -97,9 +102,20 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
             if (v != null) tts.setVoice(v)
             else tts.setLanguage(if (isHindi) Locale("hi", "IN") else Locale("en", "IN"))
             tts.setPitch(pitch())
+            tts.setSpeechRate(rate())
             tts.speak(seg, if (first) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD, null, "j" + System.nanoTime())
             first = false
         }
+    }
+
+    /** English awaaz ko alag se sunne ke liye (settings ka test). */
+    fun speakEn(text: String) {
+        if (!ready) return
+        val v = enVoice
+        if (v != null) tts.setVoice(v) else tts.setLanguage(Locale("en", "IN"))
+        tts.setPitch(pitch())
+        tts.setSpeechRate(rate())
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "e" + System.nanoTime())
     }
 
     fun shutdown() {
