@@ -33,6 +33,7 @@ private val DIM = Color.parseColor("#7A8FA3")
 private val SAMPLE = "नमस्ते सर, मैं जार्विस हूँ। यह मेरी आवाज़ है।"
 private var voice: JarvisVoice? = null
 private var xikF: EditText? = null
+private var ownF: EditText? = null
 private var cvLab: TextView? = null
 private val hh = Handler(Looper.getMainLooper())
 private var tick: Runnable? = null
@@ -169,8 +170,11 @@ val key = field("Gemini API key", sp.getString("key", "") ?: "", false)
 val igu = field("Instagram username (bina @)", sp.getString("igu", "") ?: "", false)
 add("gemini key api jemini chabi चाबी", key)
 add("instagram insta username इंस्टा", igu)
+val own = field("Aapka naam (auto-reply mein dikhega)", sp.getString("owner", "") ?: "", false)
+ownF = own
+add("naam name owner aapka नाम", own)
 add("save सेव", neon("SAVE", CY) {
-sp.edit().putString("xik", (xikF?.text?.toString() ?: sp.getString("xik", "") ?: "").trim()).putString("key", key.text.toString().trim()).putString("igu", igu.text.toString().trim().removePrefix("@")).apply()
+sp.edit().putString("owner", (ownF?.text?.toString() ?: "").trim()).putString("xik", (xikF?.text?.toString() ?: sp.getString("xik", "") ?: "").trim()).putString("key", key.text.toString().trim()).putString("igu", igu.text.toString().trim().removePrefix("@")).apply()
 Toast.makeText(this, "Save ho gaya", Toast.LENGTH_SHORT).show()
 })
 add("jaankari details privacy mitao delete profile meri जानकारी", neon("MERI JAANKARI MITAO", RD) {
@@ -318,6 +322,7 @@ splash.postDelayed({ close() }, 4300)
 vc().speak("नमस्ते सर, मैं जार्विस हूँ। सभी सिस्टम ऑनलाइन हैं।")
 }
 setContentView(root)
+if ((sp.getString("key", "") ?: "").isEmpty()) Toast.makeText(this, "Pehle Settings mein apni Gemini API key daalo (free milti hai)", Toast.LENGTH_LONG).show()
 if (b == null) hh.postDelayed({ Updater.check(this, false) }, 4500)
 tick = object : Runnable {
 override fun run() {
