@@ -14,6 +14,30 @@ import java.net.URL
 object Gemini {
 fun warm(key: String) { list(key) }
 @Volatile var lastErr = ""
+fun info(key: String, sys: String, hist: List<Pair<String, String>>, q: String): String? {
+val c = JSONArray()
+for ((u, a) in hist) { c.put(m("user", u)); c.put(m("model", a)) }
+c.put(m("user", q))
+val body = JSONObject().put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", sys))))
+.put("contents", c)
+.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
+.put("generationConfig", JSONObject().put("maxOutputTokens", 900).put("temperature", 0.4)).toString()
+for (md in listOf("gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite")) {
+try {
+val con = URL("https://generativelanguage.googleapis.com/v1beta/models/$md:generateContent").openConnection() as HttpURLConnection
+con.requestMethod = "POST"; con.connectTimeout = 8000; con.readTimeout = 25000; con.doOutput = true
+con.setRequestProperty("Content-Type", "application/json"); con.setRequestProperty("x-goog-api-key", key)
+con.outputStream.use { it.write(body.toByteArray()) }
+if (con.responseCode == 200) {
+val ps = JSONObject(con.inputStream.bufferedReader().readText()).getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts")
+val sb = StringBuilder()
+for (i in 0 until ps.length()) sb.append(ps.getJSONObject(i).optString("text"))
+if (sb.isNotBlank()) return sb.toString().trim()
+} else lastErr = md + " " + con.responseCode
+} catch (e: Exception) { lastErr = md + " " + e }
+}
+return null
+}
 private var models: List<String>? = null
 private fun m(r: String, t: String) = JSONObject().put("role", r).put("parts", JSONArray().put(JSONObject().put("text", t)))
 private fun list(key: String): List<String> {
@@ -116,6 +140,7 @@ if (pk.startsWith("com.whatsapp") || pk == "com.instagram.android") { JarvisServ
 }
 private fun autoReply(sbn: StatusBarNotification, who: String, text: String, group: String) {
 val sp = getSharedPreferences("j", MODE_PRIVATE)
+val own = sp.getString("owner", "")?.trim().orEmpty().ifEmpty { "Malik" }
 fun sk(r: String) { JarvisService.lg("auto-reply skip: " + r) }
 if (!sp.getBoolean("ar", false)) { sk("band hai"); return }
 if (group.isNotEmpty()) { sk("group"); return }
@@ -128,7 +153,7 @@ val id0 = sbn.key ?: who
 val n0 = System.currentTimeMillis()
 if (n0 - (lastAt[id0] ?: 0L) < 3600000) return
 lastAt[id0] = n0
-if (send(sbn, "(Jarvis, Vaibhav ka assistant) Vaibhav abhi busy hain. Aapka message unhe mil gaya hai, wo jaldi jawab denge.")) JarvisService.lg("auto-reply (bina key) -> " + who)
+if (send(sbn, "(Jarvis, " + own + " ka assistant) " + own + " abhi busy hain. Aapka message unhe mil gaya hai, wo jaldi jawab denge.")) JarvisService.lg("auto-reply (bina key) -> " + who)
 return
 }
 val id = sbn.key ?: who
@@ -150,7 +175,7 @@ val jo = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```")
 val r = jo?.optString("reply") ?: ""
 if (jo?.optBoolean("abuse") == true) { muted[id] = now + 600000; JarvisService.inst?.alert(who) }
 if (r.isBlank() || r.contains("SKIP", true)) { JarvisService.lg("auto-reply skip: " + who); return@Thread }
-if (send(sbn, "(Jarvis, Vaibhav ka assistant) " + r)) {
+if (send(sbn, "(Jarvis, " + own + " ka assistant) " + r)) {
 val l = chat.getOrPut(id) { ArrayList() }
 l.add(text to r); while (l.size > 6) l.removeAt(0)
 JarvisService.lg("auto-reply -> " + who + ": " + r)

@@ -439,7 +439,43 @@ val fact = s.replace(Regex("^(yaad rakh|yaad rakho|remember|याद रख|य
 sp.edit().putString("prof", sp.getString("prof", "") + " " + fact + ".").apply()
 say("याद रख लिया")
 }
+private val infoRe = Regex("kitna|kitni|kitne|kaun|kaise|kya hai|kya hota|kya hoti|kab |kahan|kaha |kyun|kyu |kaunsa|kaunsi|distance|door|\\bdur\\b|how far|how many|how much|how long|how old|how tall|what is|what's|what are|who is|who was|when |where |why |capital|population|price|rate|score|news|khabar|tell me|batao|bata do|कितना|कितनी|कितने|कौन|क्या है|क्या होता|कब |कहाँ|कहां|क्यों|कैसे|दूर|राजधानी|कीमत|भाव|स्कोर|खबर|ख़बर|बताओ|बता दो")
+private val cmdRe = Regex("call|msg|message|sms|whatsapp|youtube|alarm|torch|play|chalao|chala do|kholo|khol do|open|bhejo|bhej do|insta|weather|mausam|gaana|gana|song|volume|bluetooth|reminder|timer|कॉल|मैसेज|अलार्म|टॉर्च|चलाओ|खोलो|भेजो|भेज दो|मौसम|गाना|वॉल्यूम|ब्लूटूथ|यूट्यूब|इंस्टा|व्हाट्सऐप|टाइमर")
+private fun whereAmI(): String {
+return try {
+val lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+val l = lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time } ?: return ""
+var city = ""
+try {
+@Suppress("DEPRECATION") val a = android.location.Geocoder(this, Locale("en", "IN")).getFromLocation(l.latitude, l.longitude, 1)
+if (!a.isNullOrEmpty()) city = listOfNotNull(a[0].subLocality, a[0].locality, a[0].adminArea).joinToString(", ")
+} catch (e: Exception) { }
+" User ke phone ki abhi ki jagah: " + l.latitude + "," + l.longitude + (if (city.isNotEmpty()) " (" + city + ")" else "") + ". 'Yahan se' ka matlab yehi jagah hai."
+} catch (e: Exception) { "" }
+}
 private fun ask(q: String) {
+val key = sp.getString("key", "")?.trim().orEmpty()
+if (key.isNotEmpty() && infoRe.containsMatchIn(q.lowercase()) && !cmdRe.containsMatchIn(q.lowercase())) { askInfo(q, key); return }
+askJson(q)
+}
+private fun askInfo(q: String, key: String) {
+val hh = ArrayList(hist)
+Thread {
+val en = isEn()
+val sys = "Tum Jarvis ho, Vaibhav ke phone assistant, Google jaise sahi aur kaam ke jawab dene wale. Jawab chhota rakho (2-4 vaakya) par poori kaam ki jaankari do: doori pooche to kilometre mein sadak ki doori, gaadi se lagbhag kitna samay lagega, aur ek-do chhoti kaam ki baatein (jaise raasta ya mashhoor cheez). Taza jaankari ke liye search use karo. Markdown, bullet, emoji, star, link bilkul nahi. Number saaf bolo. " + (if (en) "Jawab English mein do." else "Jawab Devanagari Hindi mein do, English shabd English mein.") + " Abhi: " + java.util.Date() + whereAmI()
+val raw = Gemini.info(key, sys, hh, q)
+h.post {
+if (raw == null) { lg("info fail: " + Gemini.lastErr); askJson(q) }
+else {
+val sy = raw.replace(Regex("[*#`_\\[\\]]"), "").replace(Regex("\\(https?://[^)]*\\)"), "").trim()
+hist.add(q to sy); if (hist.size > 6) hist.removeAt(0)
+lg("Info: " + sy.take(120))
+say(dv(sy))
+}
+}
+}.start()
+}
+private fun askJson(q: String) {
 val key = sp.getString("key", "")?.trim().orEmpty()
 if (key.isEmpty()) { if (!fallback(q)) say(if (isEn()) "I need a Gemini key to understand that, but I can still handle calls, messages, YouTube, alarms, weather and music." else "यह समझने के लिए Gemini key चाहिए। बिना key के मैं कॉल, मैसेज, यूट्यूब, अलार्म, मौसम और म्यूज़िक जैसे आसान काम कर सकता हूँ।"); return }
 val hh = ArrayList(hist)
