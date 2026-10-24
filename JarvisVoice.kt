@@ -34,6 +34,7 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
     private var hiVoice: Voice? = null
     private var enVoice: Voice? = null
     private val pending = ArrayList<String>()
+    private var pendingEn: String? = null
 
     // Hindi (Devanagari) tukde vs baaki sab (English)
     private val part = Regex("[\\u0900-\\u097F][\\u0900-\\u097F\\s,।?!.]*|[^\\u0900-\\u097F]+")
@@ -50,13 +51,13 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
         ready = true
         pending.forEach { speak(it) }
         pending.clear()
+        pendingEn?.let { pendingEn = null; speakEn(it) }
         onReady()
     }
 
     private fun pickMale(lang: String, pref: Regex, country: String?, idx: Int): Voice? {
         val all = try { tts.voices } catch (e: Exception) { null } ?: return null
         var c = all.filter { it.locale.language == lang && !(it.features?.contains("notInstalled") ?: false) }
-        if (lang == "en") { val uk = c.filter { it.locale == Locale.UK }; if (uk.isNotEmpty()) c = uk }
         if (country != null) {
             val same = c.filter { it.locale.country == country || it.locale.country == "GB" }
             if (same.isNotEmpty()) c = same
@@ -76,6 +77,10 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
         hiVoice = pickMale("hi", Regex("hic|hid|hib"), null, sp.getInt("hvi", 0))
         enVoice = pickMale("en", Regex("gbb|gbd|rjs"), null, sp.getInt("vk", 0))
     }
+
+    fun enCount(): Int = try {
+        tts.voices.count { it.locale.language == "en" && !(it.features?.contains("notInstalled") ?: false) }
+    } catch (e: Exception) { 0 }
 
     fun enName(): String = enVoice?.name ?: "koi English voice nahi mili"
 
@@ -111,7 +116,7 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
 
     /** English awaaz ko alag se sunne ke liye (settings ka test). */
     fun speakEn(text: String) {
-        if (!ready) return
+        if (!ready) { pendingEn = text; return }
         val v = enVoice
         if (v != null) tts.setVoice(v) else tts.setLanguage(Locale("en", "IN"))
         tts.setPitch(pitch())
