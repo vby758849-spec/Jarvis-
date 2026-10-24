@@ -38,13 +38,13 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
     // Hindi (Devanagari) tukde vs baaki sab (English)
     private val part = Regex("[\\u0900-\\u097F][\\u0900-\\u097F\\s,।?!.]*|[^\\u0900-\\u097F]+")
 
-    private fun pitch() = sp.getFloat("pt", 0.65f)
-    private fun rate() = sp.getFloat("rt", 1.05f)
+    private fun pitch() = sp.getFloat("pt", 0.85f)
+    private fun rate() = sp.getFloat("rt", 1.0f)
 
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) return
         hiVoice = pickMale("hi", Regex("hic|hid|hib"), null, sp.getInt("hvi", 0))
-        enVoice = pickMale("en", Regex("gbb|gbd|rjs|enb|end"), "IN", sp.getInt("vk", 0))
+        enVoice = pickMale("en", Regex("gbb|gbd|rjs"), null, sp.getInt("vk", 0))
         tts.setPitch(pitch())
         tts.setSpeechRate(rate())
         ready = true
@@ -56,6 +56,7 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
     private fun pickMale(lang: String, pref: Regex, country: String?, idx: Int): Voice? {
         val all = try { tts.voices } catch (e: Exception) { null } ?: return null
         var c = all.filter { it.locale.language == lang && !(it.features?.contains("notInstalled") ?: false) }
+        if (lang == "en") { val uk = c.filter { it.locale == Locale.UK }; if (uk.isNotEmpty()) c = uk }
         if (country != null) {
             val same = c.filter { it.locale.country == country || it.locale.country == "GB" }
             if (same.isNotEmpty()) c = same
@@ -73,7 +74,7 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
     fun reload() {
         if (!ready) return
         hiVoice = pickMale("hi", Regex("hic|hid|hib"), null, sp.getInt("hvi", 0))
-        enVoice = pickMale("en", Regex("gbb|gbd|rjs|enb|end"), "IN", sp.getInt("vk", 0))
+        enVoice = pickMale("en", Regex("gbb|gbd|rjs"), null, sp.getInt("vk", 0))
     }
 
     fun enName(): String = enVoice?.name ?: "koi English voice nahi mili"

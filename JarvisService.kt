@@ -96,6 +96,8 @@ return START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
+if (!sp.getBoolean("pt2", false)) sp.edit().putFloat("pt", 0.85f).putFloat("rt", 1.0f).putBoolean("pt2", true).apply()
+sp.registerOnSharedPreferenceChangeListener(prefL)
 if (!sp.getBoolean("hi42", false)) sp.edit().putString("lang", "en").putInt("vk", 0).putBoolean("hi42", true).apply()
 lg("Jarvis v53")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
@@ -124,13 +126,14 @@ initWake()
 override fun onDestroy() {
 inst = null
 h.removeCallbacksAndMessages(null)
+try { sp.unregisterOnSharedPreferenceChangeListener(prefL) } catch (e: Exception) { }
 sr.destroy(); tts?.shutdown()
 try { vSvc?.shutdown(); vModel?.close() } catch (e: Exception) { }
 super.onDestroy()
 }
 fun isEn() = sp.getString("lang", "en") == "en"
-private fun curPt() = sp.getFloat("pt", if (isEn()) 0.85f else 0.65f)
-private fun curRt() = sp.getFloat("rt", if (isEn()) 0.95f else 1.05f)
+private fun curPt() = sp.getFloat("pt", 0.85f)
+private fun curRt() = sp.getFloat("rt", 1.0f)
 fun say(t0: String) {
 if (!ttsReady) return
 val t = if (isEn()) Tr.en(t0) else Pron.fix(t0)
@@ -426,6 +429,9 @@ val tm = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomMan
 if (accept) { tm.acceptRingingCall(); lg("call utha liya"); say("कॉल उठा लिया") }
 else if (Build.VERSION.SDK_INT >= 28) { tm.endCall(); lg("call kaata"); say("कॉल काट दिया") }
 } catch (e: SecurityException) { lg("call permission: " + e.message); say("कॉल की permission दो") } catch (e: Exception) { lg("call error: " + e); say("ये नहीं हो पाया") }
+}
+private val prefL = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, k ->
+if (k == "vk" || k == "hvi" || k == "pt" || k == "rt" || k == "lang" || k == "onevoice") h.post { if (ttsReady) applyVoice() }
 }
 private fun applyVoice() {
 val en = isEn()

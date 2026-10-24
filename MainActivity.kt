@@ -175,12 +175,12 @@ Toast.makeText(this, vc().enName(), Toast.LENGTH_LONG).show()
 vc().speakEn("Hello boss, all systems are online.")
 })
 tgl("ek hi awaaz one voice alag hindi english एक", "onevoice", true, "ONE VOICE FOR BOTH LANGUAGES") { vc().reload(); say(SAMPLE) }
-val refP = slider("bhaaripan bhaari patli pitch awaaz भारी", "VOICE DEPTH", "pt", 0.65f, 0.3f, 1.2f, "(lower = deeper, higher = lighter)")
-val refR = slider("raftar speed tez dheere rate रफ़्तार", "VOICE SPEED", "rt", 1.05f, 0.6f, 1.6f, "(lower = slower, higher = faster)")
+val refP = slider("bhaaripan bhaari patli pitch awaaz भारी", "VOICE DEPTH", "pt", 0.85f, 0.3f, 1.2f, "(lower = deeper, higher = lighter)")
+val refR = slider("raftar speed tez dheere rate रफ़्तार", "VOICE SPEED", "rt", 1.0f, 0.6f, 1.6f, "(lower = slower, higher = faster)")
 val pre = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-pre.addView(neon("DEEP", CY) { sp.edit().putFloat("pt", 0.5f).putFloat("rt", 0.95f).apply(); refP(); refR(); say(SAMPLE) }, LinearLayout.LayoutParams(0, -2, 1f))
-pre.addView(neon("NORMAL", CY) { sp.edit().putFloat("pt", 0.65f).putFloat("rt", 1.05f).apply(); refP(); refR(); say(SAMPLE) }, LinearLayout.LayoutParams(0, -2, 1f))
-pre.addView(neon("LIGHT", CY) { sp.edit().putFloat("pt", 0.95f).putFloat("rt", 1.1f).apply(); refP(); refR(); say(SAMPLE) }, LinearLayout.LayoutParams(0, -2, 1f))
+pre.addView(neon("DEEP", CY) { sp.edit().putFloat("pt", 0.7f).putFloat("rt", 0.95f).apply(); refP(); refR(); say(SAMPLE) }, LinearLayout.LayoutParams(0, -2, 1f))
+pre.addView(neon("NORMAL", CY) { sp.edit().putFloat("pt", 0.85f).putFloat("rt", 1.0f).apply(); refP(); refR(); say(SAMPLE) }, LinearLayout.LayoutParams(0, -2, 1f))
+pre.addView(neon("LIGHT", CY) { sp.edit().putFloat("pt", 1.0f).putFloat("rt", 1.05f).apply(); refP(); refR(); say(SAMPLE) }, LinearLayout.LayoutParams(0, -2, 1f))
 add("preset gambhir normal patli bhaari awaaz style", pre)
 tgl("auto volume badhana awaaz volume वॉल्यूम", "manvol", false, "AUTO VOLUME BOOST", true)
 
