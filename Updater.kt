@@ -19,7 +19,11 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONObject
+import java.io.File
+import java.io.RandomAccessFile
 import java.net.HttpURLConnection
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import java.net.URL
 object Updater {
 private const val API = "https://api.github.com/repos/vby758849-spec/Jarvis-/releases/tags/latest"
@@ -88,6 +92,67 @@ AlertDialog.Builder(a).setTitle("Update available")
 .setPositiveButton("Update") { _, _ -> install(a) }
 .show()
 }
+private fun finalUrl(u0: String): String {
+var u = u0
+for (i in 0 until 5) {
+val c = URL(u).openConnection() as HttpURLConnection
+c.instanceFollowRedirects = false
+c.connectTimeout = 15000; c.readTimeout = 15000
+c.setRequestProperty("Range", "bytes=0-0")
+val code = c.responseCode
+val loc = c.getHeaderField("Location")
+c.disconnect()
+if (code in 300..399 && loc != null) { u = loc; continue }
+return u
+}
+return u
+}
+private fun probe(u: String): Long {
+return try {
+val c = URL(u).openConnection() as HttpURLConnection
+c.connectTimeout = 15000; c.readTimeout = 15000
+c.setRequestProperty("Range", "bytes=0-0")
+val r = if (c.responseCode == 206) c.getHeaderField("Content-Range") else null
+c.disconnect()
+r?.substringAfter("/", "")?.trim()?.toLongOrNull() ?: -1L
+} catch (e: Exception) { -1L }
+}
+private fun fetch(u: String, total: Long, f: File, prog: (Long) -> Unit) {
+RandomAccessFile(f, "rw").use { it.setLength(total) }
+val parts = 6
+val size = (total + parts - 1) / parts
+val done = AtomicLong(0)
+val err = AtomicReference<Exception?>(null)
+val ths = (0 until parts).map { i ->
+Thread {
+try {
+val s = i * size
+val e = minOf(total - 1, s + size - 1)
+if (s <= e) {
+val c = URL(u).openConnection() as HttpURLConnection
+c.setRequestProperty("Range", "bytes=" + s + "-" + e)
+c.connectTimeout = 15000; c.readTimeout = 30000
+if (c.responseCode != 206) throw Exception("range " + c.responseCode)
+RandomAccessFile(f, "rw").use { raf ->
+raf.seek(s)
+val inp = c.inputStream
+val buf = ByteArray(131072)
+while (true) {
+val n = inp.read(buf)
+if (n < 0) break
+raf.write(buf, 0, n)
+prog(done.addAndGet(n.toLong()))
+}
+}
+}
+} catch (ex: Exception) { err.set(ex) }
+}
+}
+ths.forEach { it.start() }
+ths.forEach { it.join() }
+err.get()?.let { throw it }
+if (done.get() != total) throw Exception("incomplete download")
+}
 fun install(a: Activity) {
 if (Build.VERSION.SDK_INT >= 26 && !a.packageManager.canRequestPackageInstalls()) {
 Toast.makeText(a, "Allow Jarvis to install apps from this source, then come back and tap Update again", Toast.LENGTH_LONG).show()
@@ -98,29 +163,36 @@ showProgress(a)
 val app = a.applicationContext
 Thread {
 try {
-val c = URL(APK).openConnection() as HttpURLConnection
-c.connectTimeout = 15000; c.readTimeout = 60000; c.instanceFollowRedirects = true
+val fu = finalUrl(APK)
+val total = probe(fu)
+val f = File(app.cacheDir, "update.apk")
+var last = 0L
+val prog: (Long) -> Unit = { d ->
+val now = System.currentTimeMillis()
+if (now - last > 100) { last = now; h.post { upd(d, total) } }
+}
+if (total > 0) fetch(fu, total, f, prog)
+else {
+val c = URL(fu).openConnection() as HttpURLConnection
+c.connectTimeout = 15000; c.readTimeout = 60000
 if (c.responseCode != 200) { h.post { closeProgress() }; toast(app, "Download failed (code " + c.responseCode + ")"); return@Thread }
+var d = 0L
+f.outputStream().use { o ->
+val inp = c.inputStream
+val buf = ByteArray(262144)
+while (true) { val n = inp.read(buf); if (n < 0) break; o.write(buf, 0, n); d += n; prog(d) }
+}
+}
+val len = f.length()
 val pi = app.packageManager.packageInstaller
 val id = pi.createSession(PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL))
 val s = pi.openSession(id)
-val total = c.contentLengthLong
-s.openWrite("jarvis", 0, -1).use { o ->
-val inp = c.inputStream
-val buf = ByteArray(65536)
-var done = 0L
-var last = 0L
-while (true) {
-val n = inp.read(buf)
-if (n < 0) break
-o.write(buf, 0, n)
-done += n
-val now = System.currentTimeMillis()
-if (now - last > 100) { last = now; val d = done; h.post { upd(d, total) } }
-}
+s.openWrite("jarvis", 0, len).use { o ->
+f.inputStream().use { it.copyTo(o, 262144) }
 s.fsync(o)
 }
-h.post { upd(total, total); installing() }
+f.delete()
+h.post { upd(len, len); installing() }
 val r = object : BroadcastReceiver() {
 override fun onReceive(ctx: Context, i: Intent) {
 val st = i.getIntExtra(PackageInstaller.EXTRA_STATUS, -1)
