@@ -442,8 +442,6 @@ if (en && r < 0) tts?.setLanguage(Locale.US)
 val pref = Regex(if (en) "gbb|gbd|rjs" else "hic|hid|hib")
 val lang = tts?.voice?.locale?.language ?: ""
 var v = (tts?.voices ?: emptySet<android.speech.tts.Voice>()).filter { it.locale.language == lang && !(it.features?.contains("notInstalled") ?: false) }
-val uk = v.filter { it.locale == Locale.UK }
-if (en && uk.isNotEmpty()) v = uk
 v = v.sortedWith(compareBy({ !(it.name.contains("male", true) && !it.name.contains("female", true)) }, { !pref.containsMatchIn(it.name) }, { it.isNetworkConnectionRequired }, { it.name }))
 if (v.isNotEmpty()) tts?.voice = v[(if (en) sp.getInt("vk", 0) else sp.getInt("hvi", 0)) % v.size]
 if (!en) hiV = tts?.voice
@@ -494,7 +492,7 @@ Thread {
 val en = isEn()
 val wk = Wiki.lookup(q, if (en) "en" else "hi") ?: (if (!en) Wiki.lookup(q, "en") else null)
 val wkTxt = if (wk != null) " Wikipedia ka lekh (" + wk.first + "): " + wk.second.take(1200) + " Agar sawal ka jawab isme hai to isi ke aadhaar par do aur jawab ki shuruaat " + (if (en) "\"According to Wikipedia,\" se karo." else "\"विकिपीडिया के मुताबिक,\" se karo.") + " Agar isme nahi hai to search se do." else ""
-val sys = "Tum Jarvis ho, Vaibhav ke phone assistant, Google jaise sahi aur kaam ke jawab dene wale. Jawab chhota rakho (2-4 vaakya) par poori kaam ki jaankari do: doori pooche to kilometre mein sadak ki doori, gaadi se lagbhag kitna samay lagega, aur ek-do chhoti kaam ki baatein (jaise raasta ya mashhoor cheez). Taza jaankari ke liye search use karo. Markdown, bullet, emoji, star, link bilkul nahi. Number saaf bolo. " + (if (en) "Jawab English mein do." else "Jawab Devanagari Hindi mein do, English shabd English mein.") + " Abhi: " + java.util.Date() + whereAmI() + wkTxt
+val sys = "Tum Jarvis ho, " + sp.getString("owner", "")?.trim().orEmpty().ifEmpty { "Boss" } + " ke phone assistant, Google jaise sahi aur kaam ke jawab dene wale. Jawab chhota rakho (2-4 vaakya) par poori kaam ki jaankari do: doori pooche to kilometre mein sadak ki doori, gaadi se lagbhag kitna samay lagega, aur ek-do chhoti kaam ki baatein (jaise raasta ya mashhoor cheez). Taza jaankari ke liye search use karo. Markdown, bullet, emoji, star, link bilkul nahi. Number saaf bolo. " + (if (en) "Jawab English mein do." else "Jawab Devanagari Hindi mein do, English shabd English mein.") + " Abhi: " + java.util.Date() + whereAmI() + wkTxt
 val raw = Gemini.info(key, sys, hh, q)
 h.post {
 if (raw == null) { lg("info fail: " + Gemini.lastErr); askJson(q) }
@@ -512,7 +510,7 @@ val key = sp.getString("key", "")?.trim().orEmpty()
 if (key.isEmpty()) { if (!fallback(q)) say(if (isEn()) "I need a Gemini key to understand that, but I can still handle calls, messages, YouTube, alarms, weather and music." else "यह समझने के लिए Gemini key चाहिए। बिना key के मैं कॉल, मैसेज, यूट्यूब, अलार्म, मौसम और म्यूज़िक जैसे आसान काम कर सकता हूँ।"); return }
 val hh = ArrayList(hist)
 Thread {
-val sys = Tr.sys(sp.getString("prof", "") ?: "", isEn())
+val sys = Tr.sys(sp.getString("prof", "") ?: "", isEn(), sp.getString("owner", "")?.trim().orEmpty().ifEmpty { "Boss" })
 val raw = Gemini.call(key, sys, hh, q)
 h.post {
 if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); if (!fallback(q)) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, थोड़ी देर बाद फिर कोशिश करो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() } }

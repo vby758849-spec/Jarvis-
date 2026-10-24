@@ -169,7 +169,7 @@ cnt[id] = c + 1; lastIn[id] = text; lastAt[id] = now
 val hist = ArrayList(chat[id] ?: ArrayList())
 val prof = sp.getString("prof", "") ?: ""
 Thread {
-val raw = Gemini.call(k, Tr.rsys(prof), hist, "Bhejne wala: " + who + ". Message: " + text)
+val raw = Gemini.call(k, Tr.rsys(prof, own), hist, "Bhejne wala: " + who + ". Message: " + text)
 if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
 val jo = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { null }
 val r = jo?.optString("reply") ?: ""
