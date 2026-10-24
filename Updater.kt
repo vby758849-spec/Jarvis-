@@ -34,37 +34,37 @@ try {
 val c = URL(API).openConnection() as HttpURLConnection
 c.connectTimeout = 10000; c.readTimeout = 10000
 c.setRequestProperty("Accept", "application/vnd.github+json")
-if (c.responseCode != 200) { if (manual) toast(a, "Update check nahi ho paya (internet dekho)"); return@Thread }
+if (c.responseCode != 200) { if (manual) toast(a, "Could not check for updates (check internet)"); return@Thread }
 val j = JSONObject(c.inputStream.bufferedReader().readText())
 val n = Regex("\\d+").find(j.optString("body"))?.value?.toLongOrNull() ?: 0L
 h.post {
 if (!a.isFinishing) {
-if (n > cur(a)) ask(a, n) else if (manual) Toast.makeText(a, "App pehle se naya hai (build " + cur(a) + ")", Toast.LENGTH_LONG).show()
+if (n > cur(a)) ask(a, n) else if (manual) Toast.makeText(a, "You are up to date (build " + cur(a) + ")", Toast.LENGTH_LONG).show()
 }
 }
-} catch (e: Exception) { if (manual) toast(a, "Update check nahi ho paya") }
+} catch (e: Exception) { if (manual) toast(a, "Could not check for updates") }
 }.start()
 }
 private fun ask(a: Activity, n: Long) {
-AlertDialog.Builder(a).setTitle("Naya update aaya hai")
-.setMessage("Build " + n + " taiyaar hai (abhi build " + cur(a) + " hai). Abhi update karein?")
-.setNegativeButton("Baad mein", null)
-.setPositiveButton("Update karo") { _, _ -> install(a) }
+AlertDialog.Builder(a).setTitle("Update available")
+.setMessage("Build " + n + " is ready (you have build " + cur(a) + "). Update now?")
+.setNegativeButton("Later", null)
+.setPositiveButton("Update") { _, _ -> install(a) }
 .show()
 }
 fun install(a: Activity) {
 if (Build.VERSION.SDK_INT >= 26 && !a.packageManager.canRequestPackageInstalls()) {
-Toast.makeText(a, "Jarvis ko 'is source se install' ki ijazat do, phir wapas aakar update dobara dabao", Toast.LENGTH_LONG).show()
+Toast.makeText(a, "Allow Jarvis to install apps from this source, then come back and tap Update again", Toast.LENGTH_LONG).show()
 a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.packageName)))
 return
 }
-Toast.makeText(a, "Update download ho raha hai...", Toast.LENGTH_LONG).show()
+Toast.makeText(a, "Downloading update...", Toast.LENGTH_LONG).show()
 val app = a.applicationContext
 Thread {
 try {
 val c = URL(APK).openConnection() as HttpURLConnection
 c.connectTimeout = 15000; c.readTimeout = 60000; c.instanceFollowRedirects = true
-if (c.responseCode != 200) { toast(app, "Download nahi hua (code " + c.responseCode + ")"); return@Thread }
+if (c.responseCode != 200) { toast(app, "Download failed (code " + c.responseCode + ")"); return@Thread }
 val pi = app.packageManager.packageInstaller
 val id = pi.createSession(PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL))
 val s = pi.openSession(id)
@@ -79,7 +79,7 @@ return
 }
 try { ctx.unregisterReceiver(this) } catch (e: Exception) { }
 if (st != PackageInstaller.STATUS_SUCCESS) {
-Toast.makeText(ctx, "Update nahi hua: " + (i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""), Toast.LENGTH_LONG).show()
+Toast.makeText(ctx, "Update failed: " + (i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""), Toast.LENGTH_LONG).show()
 }
 }
 }

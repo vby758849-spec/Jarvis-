@@ -35,7 +35,7 @@ val code = c.responseCode
 val body = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.readText() ?: ""
 if (code in 200..299) {
 val id = JSONObject(body).optString("voice_id")
-h.post { if (id.isEmpty()) cb(null, "voice id nahi mili") else cb(id, "ok") }
+h.post { if (id.isEmpty()) cb(null, "voice id not returned") else cb(id, "ok") }
 } else h.post { cb(null, "Error " + code + ": " + body.take(160)) }
 } catch (e: Exception) { h.post { cb(null, "Net error: " + (e.message ?: "")) } }
 }.start()

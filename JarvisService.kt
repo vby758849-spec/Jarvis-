@@ -96,12 +96,12 @@ return START_STICKY
 override fun onCreate() {
 super.onCreate()
 inst = this
-if (!sp.getBoolean("hi42", false)) sp.edit().putString("lang", "hi").putInt("vk", 0).putBoolean("hi42", true).apply()
+if (!sp.getBoolean("hi42", false)) sp.edit().putString("lang", "en").putInt("vk", 0).putBoolean("hi42", true).apply()
 lg("Jarvis v53")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
 getSystemService(NotificationManager::class.java)
 .createNotificationChannel(NotificationChannel("jarvis", "Jarvis", NotificationManager.IMPORTANCE_LOW))
-val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis sun raha hai").setContentText("Band karne ke liye bolo: Jarvis band ho jao")
+val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis is listening").setContentText("Say: Jarvis shut down, to stop")
 .setSmallIcon(android.R.drawable.ic_btn_speak_now).build()
 if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
 else startForeground(1, n)
