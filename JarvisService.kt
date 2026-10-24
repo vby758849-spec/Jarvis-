@@ -107,7 +107,7 @@ val n = Notification.Builder(this, "jarvis").setContentTitle("Jarvis is listenin
 .setSmallIcon(android.R.drawable.ic_btn_speak_now).build()
 if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
 else startForeground(1, n)
-if (!License.valid(this)) { stopSelf(); return START_NOT_STICKY }
+if (!License.valid(this)) { stopSelf(); return }
 tts = TextToSpeech(this) {
 if (it == TextToSpeech.SUCCESS) {
 tts?.language = Locale("hi", "IN")
