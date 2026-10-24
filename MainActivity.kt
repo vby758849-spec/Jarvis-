@@ -162,6 +162,9 @@ shL()
 Toast.makeText(this, "Press SHUTDOWN, then ACTIVATE", Toast.LENGTH_SHORT).show()
 }
 add("bhasha language hindi english भाषा अंग्रेज़ी हिंदी", lb)
+add("install more voices download voice data text to speech tts engine", neon("INSTALL MORE VOICES", CY) {
+try { startActivity(Intent("com.android.settings.TTS_SETTINGS")) } catch (e: Exception) { try { startActivity(Intent(Settings.ACTION_SETTINGS)) } catch (e2: Exception) { } }
+})
 add("hindi awaaz badlo voice picker हिंदी", neon("CHANGE HINDI VOICE (TEST)", CY) {
 sp.edit().putInt("hvi", sp.getInt("hvi", 0) + 1).apply()
 vc().reload()
@@ -171,7 +174,8 @@ vc().speak(SAMPLE_HI)
 add("english awaaz badlo voice picker अंग्रेज़ी", neon("CHANGE ENGLISH VOICE (TEST)", CY) {
 sp.edit().putInt("vk", sp.getInt("vk", 0) + 1).apply()
 vc().reload()
-Toast.makeText(this, vc().enName(), Toast.LENGTH_LONG).show()
+val n = vc().enCount()
+Toast.makeText(this, if (n <= 1) "Only " + n + " English voice installed on this phone. Tap INSTALL MORE VOICES below." else "Voice " + ((sp.getInt("vk", 0) % n) + 1) + " of " + n + ": " + vc().enName(), Toast.LENGTH_LONG).show()
 vc().speakEn("Hello boss, all systems are online.")
 })
 tgl("ek hi awaaz one voice alag hindi english एक", "onevoice", true, "ONE VOICE FOR BOTH LANGUAGES") { vc().reload(); say(SAMPLE) }
@@ -271,6 +275,7 @@ splash.postDelayed({ close() }, 3200)
 if (sp.getString("lang", "en") == "en") vc().speakEn("Hello sir, I am Jarvis. All systems are online.") else vc().speak("नमस्ते सर, मैं जार्विस हूँ। सभी सिस्टम ऑनलाइन हैं।")
 }
 setContentView(root)
+if (!License.valid(this)) lock(root)
 if ((sp.getString("key", "") ?: "").isEmpty()) Toast.makeText(this, "First enter your Gemini API key in Settings (it is free)", Toast.LENGTH_LONG).show()
 if (b == null) hh.postDelayed({ Updater.check(this, false) }, 4500)
 tick = object : Runnable {
@@ -332,6 +337,37 @@ cvLab?.text = "Clone failed: " + msg
 }
 }.show()
 }
+private fun lock(root: FrameLayout) {
+val sp = getSharedPreferences("j", MODE_PRIVATE)
+val ov = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02070D")); isClickable = true }
+val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(24), dp(48), dp(24), dp(24)) }
+c.addView(RoboHead(this), LinearLayout.LayoutParams(-1, dp(190)))
+c.addView(mono("ACTIVATION REQUIRED", 17f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.12f; setPadding(0, dp(16), 0, dp(8)) })
+c.addView(mono("Send this Device ID to the seller to get your licence code:", 12f, Color.WHITE, false).apply { gravity = Gravity.CENTER })
+val id = License.deviceId(this)
+c.addView(mono(id, 22f, GR, true).apply { gravity = Gravity.CENTER; setTextIsSelectable(true); setPadding(0, dp(12), 0, dp(12)) })
+val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+row.addView(neon("COPY ID", CY) {
+(getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("id", id))
+Toast.makeText(this, "Device ID copied", Toast.LENGTH_SHORT).show()
+}, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(6), 0) })
+row.addView(neon("SHARE ID", CY) {
+startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "My Jarvis Device ID: " + id), "Share Device ID"))
+}, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(6), 0, 0, 0) })
+c.addView(row, LinearLayout.LayoutParams(-1, -2))
+val code = field("Paste licence code here", "", false)
+c.addView(code, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(18) })
+c.addView(neon("ACTIVATE LICENCE", GR) {
+val t = code.text.toString().trim()
+if (License.check(id, t)) {
+sp.edit().putString("lic", t).apply()
+root.removeView(ov)
+Toast.makeText(this, "Activated. Welcome!", Toast.LENGTH_LONG).show()
+} else Toast.makeText(this, "Invalid code for this device", Toast.LENGTH_LONG).show()
+}, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+ov.addView(ScrollView(this).apply { addView(c) }, FrameLayout.LayoutParams(-1, -1))
+root.addView(ov, FrameLayout.LayoutParams(-1, -1))
+}
 private fun ask() {
 if (perms.any { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }) requestPermissions(perms, 1)
 else proceed()
@@ -340,6 +376,7 @@ override fun onRequestPermissionsResult(rc: Int, p: Array<out String>, g: IntArr
 proceed()
 }
 private fun proceed() {
+if (!License.valid(this)) { Toast.makeText(this, "Licence not activated", Toast.LENGTH_LONG).show(); return }
 if (checkSelfPermission(RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
 Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_LONG).show(); return
 }
