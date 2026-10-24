@@ -35,6 +35,7 @@ private var bar: ProgressBar? = null
 private var pct: TextView? = null
 private var head: TextView? = null
 private fun showProgress(a: Activity) {
+sT = 0L; sD = 0L; mbps = 0.0
 val lay = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(60, 50, 60, 40); setBackgroundColor(Color.parseColor("#04101A")) }
 val hd = TextView(a).apply { text = "DOWNLOADING UPDATE"; setTextColor(Color.parseColor("#00E5FF")); textSize = 14f; typeface = android.graphics.Typeface.MONOSPACE; letterSpacing = 0.15f }
 val pb = ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = 0; isIndeterminate = true; progressTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#00E5FF")); indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#00E5FF")) }
@@ -46,14 +47,26 @@ head = hd; bar = pb; pct = pc
 dlg = AlertDialog.Builder(a).setView(lay).setCancelable(false).create()
 dlg?.show()
 }
+private var sT = 0L
+private var sD = 0L
+private var mbps = 0.0
 private fun upd(done: Long, total: Long) {
+val now = System.currentTimeMillis()
+if (sT == 0L) { sT = now; sD = done }
+if (now - sT >= 700) {
+val inst = (done - sD) * 8.0 / ((now - sT) / 1000.0) / 1000000.0
+mbps = if (mbps == 0.0) inst else mbps * 0.6 + inst * 0.4
+sT = now; sD = done
+}
 val mb = String.format("%.1f", done / 1048576.0)
+val sp = String.format("%.1f", mbps) + " Mbps"
 if (total > 0) {
 val p = (done * 100 / total).toInt()
 bar?.isIndeterminate = false
 bar?.progress = p
-pct?.text = "" + p + "%   " + mb + " / " + String.format("%.1f", total / 1048576.0) + " MB"
-} else pct?.text = mb + " MB"
+val left = if (mbps > 0.05) ((total - done) * 8.0 / (mbps * 1000000.0)).toInt() else -1
+pct?.text = "" + p + "%   " + mb + " / " + String.format("%.1f", total / 1048576.0) + " MB\n" + sp + (if (left >= 0) "   ~" + left + " s left" else "")
+} else pct?.text = mb + " MB\n" + sp
 }
 private fun installing() {
 head?.text = "INSTALLING..."
