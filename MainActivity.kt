@@ -205,6 +205,7 @@ Toast.makeText(this, "Clone removed, using the normal voice", Toast.LENGTH_SHORT
 })
 
 sec("WAKE & LISTEN")
+tgl("conversation continuous listening keep talking follow up hands free lagatar baat", "conv", true, "CONVERSATION MODE (keeps listening after a reply)")
 tgl("shaant mode reels movie video media apne aap bolna chup शांत", "calm", true, "QUIET MODE (stay silent during reels/movies)")
 tgl("message batana notification announce बताना", "an", true, "ANNOUNCE INCOMING MESSAGES")
 

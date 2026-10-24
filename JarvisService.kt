@@ -111,7 +111,7 @@ tts?.language = Locale("hi", "IN")
 applyVoice()
 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
 override fun onStart(id: String?) { speaking = true; vSvc?.setPause(true) }
-override fun onDone(id: String?) { if (id == "u") { speaking = false; vSvc?.setPause(false); h.post { unstyle() } } }
+override fun onDone(id: String?) { if (id == "u") { speaking = false; vSvc?.setPause(false); h.post { unstyle(); afterSpeech() } } }
 @Deprecated("x") override fun onError(id: String?) { speaking = false; h.post { unstyle() } }
 })
 ttsReady = true
@@ -142,7 +142,7 @@ if (!sp.getBoolean("manvol", false) && am.getStreamVolume(android.media.AudioMan
 speaking = true
 if (CloneVoice.active(sp)) {
 vSvc?.setPause(true)
-CloneVoice.speak(this, sp, if (isEn()) t else t0, { speaking = false; vSvc?.setPause(false); h.post { unstyle() } }, { speakMixed(t) })
+CloneVoice.speak(this, sp, if (isEn()) t else t0, { speaking = false; vSvc?.setPause(false); h.post { unstyle(); afterSpeech() } }, { speakMixed(t) })
 return
 }
 speakMixed(t)
@@ -219,6 +219,14 @@ h.post { wakeHit(false) }; return
 }
 } catch (e: Exception) { }
 }
+private var convFollow = false
+private fun afterSpeech() {
+if (!sp.getBoolean("conv", true) || playing() || annWait || stopping) return
+convFollow = true
+if (vSvc != null) wakeHit(true)
+stayAwake(15000)
+}
+private var stopping = false
 private fun wakeHit(quiet: Boolean) {
 val sv = vSvc ?: return
 vSvc = null
@@ -272,6 +280,8 @@ val rest = s.substring(m.range.last + 1).trim()
 if (rest.isNotEmpty()) handle(rest)
 else { say("जी बॉस?"); h.postDelayed({ stayAwake(10000) }, 1500) }
 } else if (awake) {
+if (convFollow && !annWait && s.trim().split(Regex("\\s+")).size < 2) return
+convFollow = false
 awake = false; tk++
 if (annWait) { annWait = false; if (YES.containsMatchIn(s)) say(lastMsg) }
 else handle(s)
@@ -345,7 +355,7 @@ val on = !Regex("band|बंद|बन्द|off|ऑफ|रोक").containsMatc
 sp.edit().putBoolean("ys", on).apply()
 say(if (on) "ऐड स्किप चालू" else "ऐड स्किप बंद")
 }
-Regex("band ho ?ja|बंद हो ?जा|apne aap ko band|अपने आप को बंद|shut ?down|शट ?डाउन|app band|ऐप बंद|exit").containsMatchIn(s) -> { say("ठीक है सर, बंद हो रहा हूँ"); h.postDelayed({ stopSelf() }, 2500) }
+Regex("band ho ?ja|बंद हो ?जा|apne aap ko band|अपने आप को बंद|shut ?down|शट ?डाउन|app band|ऐप बंद|exit").containsMatchIn(s) -> { stopping = true; say("ठीक है सर, बंद हो रहा हूँ"); h.postDelayed({ stopSelf() }, 2500) }
 Regex("mimicry|mimic|मिमिक्री|nakal|नकल").containsMatchIn(s) -> mimic(s)
 Regex("insta|इंस्टा").containsMatchIn(s) && !Regex("bhej|भेज|send|likh|लिख").containsMatchIn(s) -> insta(s)
 Regex("schedule|शेड्यूल|कैलेंडर|calendar|agenda|एजेंडा|मीटिंग").containsMatchIn(s) -> agenda()
@@ -456,13 +466,29 @@ if (!a.isNullOrEmpty()) city = listOfNotNull(a[0].subLocality, a[0].locality, a[
 private fun ask(q: String) {
 val key = sp.getString("key", "")?.trim().orEmpty()
 if (key.isNotEmpty() && infoRe.containsMatchIn(q.lowercase()) && !cmdRe.containsMatchIn(q.lowercase())) { askInfo(q, key); return }
+if (key.isEmpty() && infoRe.containsMatchIn(q.lowercase()) && !cmdRe.containsMatchIn(q.lowercase())) { wikiOnly(q); return }
 askJson(q)
+}
+private fun wikiOnly(q: String) {
+Thread {
+val en = isEn()
+val w = Wiki.lookup(q, if (en) "en" else "hi") ?: (if (!en) Wiki.lookup(q, "en") else null)
+h.post {
+if (w == null) { if (!fallback(q)) say(if (isEn()) "I could not find that on Wikipedia." else "यह मुझे विकिपीडिया पर नहीं मिला।") }
+else {
+val sents = w.second.split(Regex("(?<=[.।])\\s+")).take(2).joinToString(" ")
+say(dv((if (en) "According to Wikipedia, " else "विकिपीडिया के मुताबिक, ") + sents))
+}
+}
+}.start()
 }
 private fun askInfo(q: String, key: String) {
 val hh = ArrayList(hist)
 Thread {
 val en = isEn()
-val sys = "Tum Jarvis ho, Vaibhav ke phone assistant, Google jaise sahi aur kaam ke jawab dene wale. Jawab chhota rakho (2-4 vaakya) par poori kaam ki jaankari do: doori pooche to kilometre mein sadak ki doori, gaadi se lagbhag kitna samay lagega, aur ek-do chhoti kaam ki baatein (jaise raasta ya mashhoor cheez). Taza jaankari ke liye search use karo. Markdown, bullet, emoji, star, link bilkul nahi. Number saaf bolo. " + (if (en) "Jawab English mein do." else "Jawab Devanagari Hindi mein do, English shabd English mein.") + " Abhi: " + java.util.Date() + whereAmI()
+val wk = Wiki.lookup(q, if (en) "en" else "hi") ?: (if (!en) Wiki.lookup(q, "en") else null)
+val wkTxt = if (wk != null) " Wikipedia ka lekh (" + wk.first + "): " + wk.second.take(1200) + " Agar sawal ka jawab isme hai to isi ke aadhaar par do aur jawab ki shuruaat " + (if (en) "\"According to Wikipedia,\" se karo." else "\"विकिपीडिया के मुताबिक,\" se karo.") + " Agar isme nahi hai to search se do." else ""
+val sys = "Tum Jarvis ho, Vaibhav ke phone assistant, Google jaise sahi aur kaam ke jawab dene wale. Jawab chhota rakho (2-4 vaakya) par poori kaam ki jaankari do: doori pooche to kilometre mein sadak ki doori, gaadi se lagbhag kitna samay lagega, aur ek-do chhoti kaam ki baatein (jaise raasta ya mashhoor cheez). Taza jaankari ke liye search use karo. Markdown, bullet, emoji, star, link bilkul nahi. Number saaf bolo. " + (if (en) "Jawab English mein do." else "Jawab Devanagari Hindi mein do, English shabd English mein.") + " Abhi: " + java.util.Date() + whereAmI() + wkTxt
 val raw = Gemini.info(key, sys, hh, q)
 h.post {
 if (raw == null) { lg("info fail: " + Gemini.lastErr); askJson(q) }
