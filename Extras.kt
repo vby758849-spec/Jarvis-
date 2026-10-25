@@ -146,17 +146,20 @@ val sp = getSharedPreferences("j", MODE_PRIVATE)
 val own = sp.getString("owner", "")?.trim().orEmpty().ifEmpty { "Malik" }
 fun sk(r: String) { JarvisService.lg("auto-reply skip: " + r) }
 if (!sp.getBoolean("ar", false)) { sk("band hai"); return }
+val biz = sp.getString("arm", "p") == "b"
+val bn = sp.getString("bn", "")?.trim().orEmpty().ifEmpty { "our business" }
 if (group.isNotEmpty()) { sk("group"); return }
 if (text.isBlank()) { sk("khali"); return }
-if (text.startsWith("(Jarvis")) return
-if (who.firstOrNull()?.let { it == '+' || it.isDigit() } == true) { sk("number"); return }
+if (text.startsWith("(Jarvis") || text.startsWith("(" + bn + " Assistant)")) return
+if (!biz && who.firstOrNull()?.let { it == '+' || it.isDigit() } == true) { sk("number"); return }
 val k = sp.getString("key", "")?.trim().orEmpty()
 if (k.isEmpty()) {
 val id0 = sbn.key ?: who
 val n0 = System.currentTimeMillis()
 if (n0 - (lastAt[id0] ?: 0L) < 3600000) return
 lastAt[id0] = n0
-if (send(sbn, "(Jarvis, " + own + " ka assistant) " + own + " abhi busy hain. Aapka message unhe mil gaya hai, wo jaldi jawab denge.")) JarvisService.lg("auto-reply (bina key) -> " + who)
+val fb = if (biz) "(" + bn + " Assistant) Hello! Thank you for contacting " + bn + ". We have received your message and will get back to you shortly." else "(Jarvis, " + own + " ka assistant) " + own + " abhi busy hain. Aapka message unhe mil gaya hai, wo jaldi jawab denge."
+if (send(sbn, fb)) JarvisService.lg("auto-reply (bina key) -> " + who)
 return
 }
 val id = sbn.key ?: who
@@ -167,18 +170,20 @@ if (now - (lastAt[id] ?: 0L) < 4000) { sk("jaldi"); return }
 if (now - cntStart > 3600000) { cntStart = now; cnt.clear() }
 val c = cnt[id] ?: 0
 if (c >= 12) { sk("is chat ki ghante ki limit"); return }
-if (cnt.values.sum() >= 40) { sk("kul limit"); return }
+if (cnt.values.sum() >= (if (biz) 150 else 40)) { sk("kul limit"); return }
 cnt[id] = c + 1; lastIn[id] = text; lastAt[id] = now
 val hist = ArrayList(chat[id] ?: ArrayList())
 val prof = sp.getString("prof", "") ?: ""
+val bizInfo = "Business name: " + bn + ". What we do/sell: " + (sp.getString("bd", "") ?: "") + ". Prices: " + (sp.getString("bp", "") ?: "") + ". Working hours: " + (sp.getString("bh", "") ?: "") + ". Address/city: " + (sp.getString("ba", "") ?: "") + ". How to order/contact/payment: " + (sp.getString("bc", "") ?: "") + ". Extra rules/FAQ: " + (sp.getString("bx", "") ?: "")
+val sysP = if (biz) Tr.bsys(bn, own, bizInfo) else Tr.rsys(prof, own)
 Thread {
-val raw = Gemini.call(k, Tr.rsys(prof, own), hist, "Bhejne wala: " + who + ". Message: " + text)
+val raw = Gemini.call(k, sysP, hist, "Bhejne wala: " + who + ". Message: " + text)
 if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
 val jo = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { null }
 val r = jo?.optString("reply") ?: ""
-if (jo?.optBoolean("abuse") == true) { muted[id] = now + 600000; JarvisService.inst?.alert(who) }
+if (jo?.optBoolean("abuse") == true) { muted[id] = now + 600000; if (!biz) JarvisService.inst?.alert(who) }
 if (r.isBlank() || r.contains("SKIP", true)) { JarvisService.lg("auto-reply skip: " + who); return@Thread }
-if (send(sbn, "(Jarvis, " + own + " ka assistant) " + r)) {
+if (send(sbn, (if (biz) "(" + bn + " Assistant) " else "(Jarvis, " + own + " ka assistant) ") + r)) {
 val l = chat.getOrPut(id) { ArrayList() }
 l.add(text to r); while (l.size > 6) l.removeAt(0)
 JarvisService.lg("auto-reply -> " + who + ": " + r)

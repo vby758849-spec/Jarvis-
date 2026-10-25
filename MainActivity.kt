@@ -208,6 +208,34 @@ cl.text = "Clone voice: none"
 Toast.makeText(this, "Clone removed, using the normal voice", Toast.LENGTH_SHORT).show()
 })
 
+sec("AUTO-REPLY")
+tgl("auto reply on off chalu band ऑटो रिप्लाई", "ar", false, "AUTO-REPLY")
+val md = neon("", CY) { }
+fun shM() { md.text = "MODE: " + (if (sp.getString("arm", "p") == "b") "BUSINESS (talk to my customers)" else "PERSONAL (casual use)") }
+shM()
+md.setOnClickListener { sp.edit().putString("arm", if (sp.getString("arm", "p") == "b") "p" else "b").apply(); shM() }
+add("auto reply mode personal business professional vyapar dukaan ऑटो रिप्लाई मोड", md)
+add("business details customer vyapar dukaan professional", mono("BUSINESS MODE: Jarvis replies to your customers using the details below. Fill them once and press SAVE BUSINESS.", 10f, Color.parseColor("#5FA8B8"), false))
+fun mf(h: String, k: String) = field(h, sp.getString(k, "") ?: "", false).apply { setSingleLine(false); minLines = 2; maxLines = 5; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE; gravity = android.view.Gravity.TOP or android.view.Gravity.START }
+val fbn = field("Business name", sp.getString("bn", "") ?: "", false)
+val fbd = mf("What you sell / your services", "bd")
+val fbp = mf("Prices / rate list", "bp")
+val fbh = mf("Working hours / days", "bh")
+val fba = mf("Address / city / delivery area", "ba")
+val fbc = mf("How to order, contact number, payment info", "bc")
+val fbx = mf("Extra rules / FAQ (refund, offers, what NOT to say)", "bx")
+add("business name vyapar dukaan naam", fbn)
+add("business sell services products kya bechte", fbd)
+add("business price rate list daam", fbp)
+add("business hours timing samay", fbh)
+add("business address city delivery pata", fba)
+add("business order contact payment upi", fbc)
+add("business faq rules refund offer", fbx)
+add("save business vyapar details सेव", neon("SAVE BUSINESS", CY) {
+sp.edit().putString("bn", fbn.text.toString().trim()).putString("bd", fbd.text.toString().trim()).putString("bp", fbp.text.toString().trim()).putString("bh", fbh.text.toString().trim()).putString("ba", fba.text.toString().trim()).putString("bc", fbc.text.toString().trim()).putString("bx", fbx.text.toString().trim()).apply()
+Toast.makeText(this, "Business details saved", Toast.LENGTH_SHORT).show()
+})
+
 sec("WAKE & LISTEN")
 tgl("conversation continuous listening keep talking follow up hands free lagatar baat", "conv", true, "CONVERSATION MODE (keeps listening after a reply)")
 tgl("shaant mode reels movie video media apne aap bolna chup शांत", "calm", true, "QUIET MODE (stay silent during reels/movies)")
