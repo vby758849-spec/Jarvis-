@@ -42,6 +42,7 @@ companion object {
 @Volatile var sendAt = 0L
 @Volatile var igText = ""
 @Volatile var igAt = 0L
+@Volatile var ytAt = 0L
 @Volatile var btWant = 0
 @Volatile var btAt = 0L
 @Volatile var btName = ""
@@ -334,8 +335,8 @@ if (isEn()) sp.edit().putInt("vk", sp.getInt("vk", 0) + 1).apply() else sp.edit(
 applyVoice()
 say("ये मेरी नई आवाज़ है, पसंद आई?")
 }
-Regex("(कॉल|फोन|फ़ोन|call|phone).*(उठा|रिसीव|अटेंड|receive|utha|pick|attend)").containsMatchIn(s) -> callCtl(true)
-Regex("(कॉल|फोन|फ़ोन|call|phone).*(काट|कट|रिजेक्ट|reject|cut|kaat|disconnect)").containsMatchIn(s) -> callCtl(false)
+Regex("(कॉल|फोन|फ़ोन|call|phone).*(उठा|रिसीव|अटेंड|receive|utha|pick|attend|answer)|^(utha|uthao|utha lo|utha do|pick up|answer|उठाओ|उठा लो|उठा दो)\\b").containsMatchIn(s) -> callCtl(true)
+Regex("(कॉल|फोन|फ़ोन|call|phone).*(काट|कट|रिजेक्ट|reject|cut|kaat|disconnect|hang|end)|^(kaat|kaato|kaat do|cut|reject|decline|काट दो|काटो|कट कर)\\b").containsMatchIn(s) -> callCtl(false)
 Regex("english|इंग्लिश|अंग्रेज").containsMatchIn(s) && Regex("bol|बोल|speak").containsMatchIn(s) -> setLang("en")
 Regex("hindi|हिंदी|हिन्दी").containsMatchIn(s) && Regex("bol|बोल|speak").containsMatchIn(s) -> setLang("hi")
 Regex("auto ?reply|ऑटो ?रिप्लाई").containsMatchIn(s) -> {
@@ -426,6 +427,7 @@ h.post { say(if (isEn()) "Boss, " + who + " insulted you. I have replied and pau
 private fun callCtl(accept: Boolean) {
 if (MsgListener.inst?.callAct(accept) == true) { say(if (accept) "कॉल उठा लिया" else "कॉल काट दिया"); return }
 try {
+if (checkSelfPermission(android.Manifest.permission.ANSWER_PHONE_CALLS) != android.content.pm.PackageManager.PERMISSION_GRANTED) { lg("call: ANSWER_PHONE_CALLS permission nahi"); say("कॉल की permission दो"); return }
 val tm = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
 if (accept) { tm.acceptRingingCall(); lg("call utha liya"); say("कॉल उठा लिया") }
 else if (Build.VERSION.SDK_INT >= 28) { tm.endCall(); lg("call kaata"); say("कॉल काट दिया") }
@@ -563,6 +565,7 @@ else -> say(j.optString("say"))
 }
 }
 fun go(i: Intent): Boolean = try {
+if (i.dataString?.contains("youtube.com/results") == true) ytAt = System.currentTimeMillis()
 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); true
 } catch (e: Exception) { say("ये नहीं हो पाया"); false }
 }

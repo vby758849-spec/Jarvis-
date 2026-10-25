@@ -93,15 +93,18 @@ override fun onListenerConnected() { inst = this }
 override fun onListenerDisconnected() { inst = null }
 fun callAct(accept: Boolean): Boolean {
 for (sbn in activeNotifications ?: return false) {
-if (!sbn.packageName.startsWith("com.whatsapp")) continue
+if (sbn.packageName == packageName) continue
 val n = sbn.notification
 val acts = n.actions ?: continue
-if (n.category != Notification.CATEGORY_CALL && acts.size < 2) continue
+val pk = sbn.packageName
+val callish = n.category == Notification.CATEGORY_CALL || pk.contains("dialer") || pk.contains("incallui") || pk.contains("telecom") || pk.startsWith("com.whatsapp") || pk.contains("phone")
+if (!callish) continue
+if (n.category != Notification.CATEGORY_CALL && acts.size < 2 && !pk.contains("dialer") && !pk.contains("phone")) continue
 for (a in acts) {
 val t = a.title?.toString()?.lowercase() ?: ""
-val ok = if (accept) Regex("answer|accept|उठा|जवाब|रिसीव|उत्तर").containsMatchIn(t) else Regex("decline|reject|end|काट|अस्वीकार|मना").containsMatchIn(t)
+val ok = if (accept) Regex("answer|accept|pick|उठा|जवाब|रिसीव|उत्तर").containsMatchIn(t) else Regex("decline|reject|end|hang|dismiss|काट|अस्वीकार|मना|समाप्त").containsMatchIn(t)
 if (ok) {
-try { a.actionIntent.send(); JarvisService.lg("WA call: " + t); return true } catch (e: Exception) { JarvisService.lg("WA call fail: " + e) }
+try { a.actionIntent.send(); JarvisService.lg("Call: " + pk + " " + t); return true } catch (e: Exception) { JarvisService.lg("Call fail: " + e) }
 }
 }
 }
@@ -202,7 +205,9 @@ override fun onAccessibilityEvent(e: AccessibilityEvent?) {
 val root = rootInActiveWindow ?: return
 val now = System.currentTimeMillis()
 if (e?.packageName?.toString() == "com.android.settings") { if (JarvisService.fsAt != 0L) { force(root, now); return }; if (JarvisService.btWant != 0 && now - JarvisService.btAt < 30000) bt(root); return }
-if (e?.packageName?.toString() == "com.google.android.youtube") { if (getSharedPreferences("j", MODE_PRIVATE).getBoolean("ys", true)) skipAd(root); return }
+if (e?.packageName?.toString() == "com.google.android.youtube") {
+if (JarvisService.ytAt != 0L) { if (now - JarvisService.ytAt > 20000) JarvisService.ytAt = 0L else if (playFirst(root, now)) return }
+if (getSharedPreferences("j", MODE_PRIVATE).getBoolean("ys", true)) skipAd(root); return }
 if (JarvisService.igText.isNotEmpty() && now - JarvisService.igAt < 25000 && e?.packageName?.toString() == "com.instagram.android") { ig(root); return }
 if (now - JarvisService.sendAt > 20000) return
 val n = findSend(root)
@@ -235,6 +240,22 @@ JarvisService.lg("Band: Force stop dabaya")
 }
 private var lastBt = 0L
 private var lastSk = 0L
+private var lastYt = 0L
+private fun findVid(n: AccessibilityNodeInfo?, re: Regex, d: Int): AccessibilityNodeInfo? {
+if (n == null || d > 14) return null
+val cd = n.contentDescription?.toString() ?: ""
+if (cd.isNotEmpty() && re.containsMatchIn(cd) && !cd.contains("shorts", true)) return n
+for (i in 0 until n.childCount) { val r = findVid(n.getChild(i), re, d + 1); if (r != null) return r }
+return null
+}
+private fun playFirst(root: AccessibilityNodeInfo, now: Long): Boolean {
+if (now - lastYt < 700) return false
+lastYt = now
+val re = Regex("play video|वीडियो चलाएं|वीडियो चलाएँ|views|बार देखा", RegexOption.IGNORE_CASE)
+val v = up(findVid(root, re, 0)) ?: return false
+if (v.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { JarvisService.ytAt = 0L; JarvisService.lg("YT: pehla video chalaya"); return true }
+return false
+}
 private fun skipAd(root: AccessibilityNodeInfo) {
 val now = System.currentTimeMillis()
 if (now - lastSk < 500) return
