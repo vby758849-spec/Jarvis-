@@ -37,11 +37,11 @@ private var bar: ProgressBar? = null
 private var pct: TextView? = null
 private var head: TextView? = null
 private fun showProgress(a: Activity) {
-sT = 0L; sD = 0L; mbps = 0.0
-val lay = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(60, 50, 60, 40); setBackgroundColor(Color.parseColor("#04101A")) }
-val hd = TextView(a).apply { text = "DOWNLOADING UPDATE"; setTextColor(Color.parseColor("#00E5FF")); textSize = 14f; typeface = android.graphics.Typeface.MONOSPACE; letterSpacing = 0.15f }
-val pb = ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = 0; isIndeterminate = true; progressTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#00E5FF")); indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#00E5FF")) }
-val pc = TextView(a).apply { text = "Connecting..."; setTextColor(Color.parseColor("#9FE8FF")); textSize = 13f; typeface = android.graphics.Typeface.MONOSPACE; gravity = Gravity.CENTER }
+sT = 0L; sD = 0L; mbps = 0.0; shown = 0L
+val lay = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(60, 50, 60, 40); setBackgroundColor(Color.parseColor("#0B0C22")) }
+val hd = TextView(a).apply { text = "DOWNLOADING UPDATE"; setTextColor(Color.parseColor("#A9B8FF")); textSize = 14f; typeface = android.graphics.Typeface.MONOSPACE; letterSpacing = 0.15f }
+val pb = ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = 0; isIndeterminate = true; progressTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#A9B8FF")); indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#A9B8FF")) }
+val pc = TextView(a).apply { text = "Connecting..."; setTextColor(Color.parseColor("#D6DCFF")); textSize = 13f; typeface = android.graphics.Typeface.MONOSPACE; gravity = Gravity.CENTER }
 lay.addView(hd)
 lay.addView(pb, LinearLayout.LayoutParams(-1, 60).apply { topMargin = 30 })
 lay.addView(pc, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 20 })
@@ -50,9 +50,11 @@ dlg = AlertDialog.Builder(a).setView(lay).setCancelable(false).create()
 dlg?.show()
 }
 private var sT = 0L
+private var shown = 0L
 private var sD = 0L
 private var mbps = 0.0
-private fun upd(done: Long, total: Long) {
+private fun upd(done0: Long, total: Long) {
+val done = maxOf(done0, shown); shown = done
 val now = System.currentTimeMillis()
 if (sT == 0L) { sT = now; sD = done }
 if (now - sT >= 700) {
@@ -65,7 +67,8 @@ val sp = String.format("%.1f", mbps) + " Mbps"
 if (total > 0) {
 val p = (done * 100 / total).toInt()
 bar?.isIndeterminate = false
-bar?.progress = p
+bar?.max = 1000
+bar?.progress = (done * 1000 / total).toInt()
 val left = if (mbps > 0.05) ((total - done) * 8.0 / (mbps * 1000000.0)).toInt() else -1
 pct?.text = "" + p + "%   " + mb + " / " + String.format("%.1f", total / 1048576.0) + " MB\n" + sp + (if (left >= 0) "   ~" + left + " s left" else "")
 } else pct?.text = mb + " MB\n" + sp

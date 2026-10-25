@@ -68,11 +68,11 @@ super.onCreate(b)
 val sp = getSharedPreferences("j", MODE_PRIVATE)
 val root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#05060F")) }
 root.addView(PremiumBg(this), FrameLayout.LayoutParams(-1, -1))
-val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(40), dp(18), dp(28)) }
+val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(28), dp(18), dp(28)) }
 col.addView(mono("J.A.R.V.I.S", 26f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.25f })
 col.addView(mono("JUST A RATHER VERY INTELLIGENT SYSTEM", 9f, Color.parseColor("#8C86C9"), false).apply { gravity = Gravity.CENTER; letterSpacing = 0.1f })
 val robo = OrbView(this)
-col.addView(robo, LinearLayout.LayoutParams(-1, dp(220)).apply { topMargin = dp(10) })
+col.addView(robo, LinearLayout.LayoutParams(-1, dp(170)).apply { topMargin = dp(6) })
 val panel = col
 val status = mono("OFFLINE", 14f, DIM, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.3f; setPadding(0, dp(10), 0, dp(10)) }
 panel.addView(status)
@@ -98,12 +98,22 @@ panel.addView(logv)
 
 val st = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
 val items = ArrayList<Pair<String, View>>()
+var applyVis: () -> Unit = {}
+var secN = 0
+var curSec = -1
+val open = HashMap<Int, Boolean>()
+val secOf = HashMap<View, Int>()
 fun add(keys: String, v: View, top: Int = 10) {
 st.addView(v, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(top) })
 items.add(keys.lowercase() to v)
+secOf[v] = curSec
 }
 fun sec(title: String) {
-add("\u0000", mono("// " + title, 10f, Color.parseColor("#8C86C9"), false).apply { setPadding(0, dp(14), 0, 0) }, 4)
+val idx = secN++
+curSec = idx
+val hv = mono("▸  " + title, 11f, CY, true).apply { setPadding(0, dp(12), 0, dp(6)); letterSpacing = 0.12f }
+hv.setOnClickListener { open[idx] = !(open[idx] ?: false); hv.text = (if (open[idx] == true) "▾  " else "▸  ") + title; applyVis() }
+add("\u0000", hv, 6)
 }
 fun slider(keys: String, title: String, pk: String, def: Float, mn: Float, mx: Float, hint: String): () -> Unit {
 val lab = mono("", 11f, Color.parseColor("#D6DCFF"), false).apply { setPadding(0, dp(4), 0, 0) }
@@ -262,17 +272,22 @@ q.addTextChangedListener(object : TextWatcher {
 override fun beforeTextChanged(s: CharSequence?, a: Int, b2: Int, c: Int) {}
 override fun onTextChanged(s: CharSequence?, a: Int, b2: Int, c: Int) {}
 override fun afterTextChanged(e: Editable?) {
-val s = (e?.toString() ?: "").lowercase().trim()
-if (s.isNotEmpty()) st.visibility = View.VISIBLE
+if ((e?.toString() ?: "").trim().isNotEmpty()) st.visibility = View.VISIBLE
+applyVis()
+}
+})
+applyVis = {
+val s = q.text.toString().lowercase().trim()
 var n = 0
 for ((k, v) in items) {
-val ok = s.isEmpty() || k.contains(s)
+val hdr = k == "\u0000"
+val ok = if (s.isEmpty()) (hdr || open[secOf[v] ?: -1] == true) else (!hdr && k.contains(s))
 v.visibility = if (ok) View.VISIBLE else View.GONE
-if (ok && k != "\u0000") n++
+if (ok && !hdr) n++
 }
 none.visibility = if (s.isNotEmpty() && n == 0) View.VISIBLE else View.GONE
 }
-})
+applyVis()
 panel.addView(head)
 panel.addView(q, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
 panel.addView(none)
