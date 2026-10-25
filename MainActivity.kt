@@ -26,10 +26,10 @@ class MainActivity : Activity() {
 private val perms = mutableListOf(RECORD_AUDIO, CALL_PHONE, SEND_SMS, READ_CONTACTS, ANSWER_PHONE_CALLS, ACCESS_COARSE_LOCATION, READ_CALENDAR).apply {
 if (Build.VERSION.SDK_INT >= 33) add(POST_NOTIFICATIONS)
 }.toTypedArray()
-private val CY = Color.parseColor("#00E5FF")
-private val GR = Color.parseColor("#2BFF88")
-private val RD = Color.parseColor("#FF4D6D")
-private val DIM = Color.parseColor("#7A8FA3")
+private val CY = Color.parseColor("#A9B8FF")
+private val GR = Color.parseColor("#FFC27A")
+private val RD = Color.parseColor("#FF6B8A")
+private val DIM = Color.parseColor("#8A8FB5")
 private val SAMPLE = "Hello sir, I am Jarvis. This is my voice."
 private val SAMPLE_HI = "नमस्ते सर, मैं जार्विस हूँ। यह मेरी आवाज़ है।"
 private fun say(t: String) { if (getSharedPreferences("j", MODE_PRIVATE).getString("lang", "en") == "en") vc().speakEn(t) else vc().speak(SAMPLE_HI) }
@@ -58,7 +58,7 @@ private fun field(h: String, v: String, secret: Boolean) = EditText(this).apply 
 hint = h; setText(v); textSize = 13f
 setTextColor(Color.WHITE); setHintTextColor(DIM)
 typeface = Typeface.MONOSPACE
-background = box(Color.parseColor("#12394A"), Color.parseColor("#04101A"), 10)
+background = box(Color.parseColor("#2B2F66"), Color.parseColor("#0B0C22"), 10)
 setPadding(dp(12), dp(10), dp(12), dp(10))
 setSingleLine(true)
 if (secret) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -66,11 +66,11 @@ if (secret) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATI
 override fun onCreate(b: Bundle?) {
 super.onCreate(b)
 val sp = getSharedPreferences("j", MODE_PRIVATE)
-val root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02070D")) }
-root.addView(GridBg(this), FrameLayout.LayoutParams(-1, -1))
+val root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#05060F")) }
+root.addView(PremiumBg(this), FrameLayout.LayoutParams(-1, -1))
 val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(40), dp(18), dp(28)) }
 col.addView(mono("J.A.R.V.I.S", 26f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.25f })
-col.addView(mono("JUST A RATHER VERY INTELLIGENT SYSTEM", 9f, Color.parseColor("#5FA8B8"), false).apply { gravity = Gravity.CENTER; letterSpacing = 0.1f })
+col.addView(mono("JUST A RATHER VERY INTELLIGENT SYSTEM", 9f, Color.parseColor("#8C86C9"), false).apply { gravity = Gravity.CENTER; letterSpacing = 0.1f })
 val robo = OrbView(this)
 col.addView(robo, LinearLayout.LayoutParams(-1, dp(220)).apply { topMargin = dp(10) })
 val panel = col
@@ -86,9 +86,9 @@ val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; set
 btns.addView(neon("▶  ACTIVATE", CY) { ask() }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(6), 0) })
 btns.addView(neon("■  SHUTDOWN", RD) { stopService(Intent(this, JarvisService::class.java)) }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(6), 0, 0, 0) })
 panel.addView(btns)
-val logHead = mono("// SYSTEM LOG", 10f, Color.parseColor("#5FA8B8"), false).apply { setPadding(0, dp(14), 0, dp(4)) }
-val logv = mono("", 11f, Color.parseColor("#9FE8FF"), false).apply {
-setPadding(dp(12), dp(10), dp(12), dp(10)); background = box(Color.parseColor("#12394A"), Color.parseColor("#04101A"), 12)
+val logHead = mono("// SYSTEM LOG", 10f, Color.parseColor("#8C86C9"), false).apply { setPadding(0, dp(14), 0, dp(4)) }
+val logv = mono("", 11f, Color.parseColor("#D6DCFF"), false).apply {
+setPadding(dp(12), dp(10), dp(12), dp(10)); background = box(Color.parseColor("#2B2F66"), Color.parseColor("#0B0C22"), 12)
 }
 val showLog = { sp.getBoolean("showlog", false) }
 logHead.visibility = if (showLog()) View.VISIBLE else View.GONE
@@ -103,10 +103,10 @@ st.addView(v, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(top) })
 items.add(keys.lowercase() to v)
 }
 fun sec(title: String) {
-add("\u0000", mono("// " + title, 10f, Color.parseColor("#5FA8B8"), false).apply { setPadding(0, dp(14), 0, 0) }, 4)
+add("\u0000", mono("// " + title, 10f, Color.parseColor("#8C86C9"), false).apply { setPadding(0, dp(14), 0, 0) }, 4)
 }
 fun slider(keys: String, title: String, pk: String, def: Float, mn: Float, mx: Float, hint: String): () -> Unit {
-val lab = mono("", 11f, Color.parseColor("#9FE8FF"), false).apply { setPadding(0, dp(4), 0, 0) }
+val lab = mono("", 11f, Color.parseColor("#D6DCFF"), false).apply { setPadding(0, dp(4), 0, 0) }
 val sb = SeekBar(this).apply { max = 100 }
 fun show(v: Float) { lab.text = title + ": " + String.format("%.2f", v) + "   " + hint }
 fun refresh() {
@@ -192,7 +192,7 @@ sec("VOICE CLONE (from an audio clip)")
 val xik = field("ElevenLabs API key (clone ke liye)", sp.getString("xik", "") ?: "", false)
 xikF = xik
 add("clone clip voice nakal awaaz elevenlabs key kisi ki awaaz क्लोन", xik)
-val cl = mono("", 11f, Color.parseColor("#9FE8FF"), false).apply { setPadding(0, dp(4), 0, 0) }
+val cl = mono("", 11f, Color.parseColor("#D6DCFF"), false).apply { setPadding(0, dp(4), 0, 0) }
 cvLab = cl
 cl.text = if (sp.getString("cvid", "").isNullOrEmpty()) "Clone voice: none" else "Clone voice: " + (sp.getString("cvn", "") ?: "") + " (ready)"
 add("clone clip voice nakal awaaz status", cl)
@@ -215,7 +215,7 @@ fun shM() { md.text = "MODE: " + (if (sp.getString("arm", "p") == "b") "BUSINESS
 shM()
 md.setOnClickListener { sp.edit().putString("arm", if (sp.getString("arm", "p") == "b") "p" else "b").apply(); shM() }
 add("auto reply mode personal business professional vyapar dukaan ऑटो रिप्लाई मोड", md)
-add("business details customer vyapar dukaan professional", mono("BUSINESS MODE: Jarvis replies to your customers using the details below. Fill them once and press SAVE BUSINESS.", 10f, Color.parseColor("#5FA8B8"), false))
+add("business details customer vyapar dukaan professional", mono("BUSINESS MODE: Jarvis replies to your customers using the details below. Fill them once and press SAVE BUSINESS.", 10f, Color.parseColor("#8C86C9"), false))
 fun mf(h: String, k: String) = field(h, sp.getString(k, "") ?: "", false).apply { setSingleLine(false); minLines = 2; maxLines = 5; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE; gravity = android.view.Gravity.TOP or android.view.Gravity.START }
 val fbn = field("Business name", sp.getString("bn", "") ?: "", false)
 val fbd = mf("What you sell / your services", "bd")
@@ -243,7 +243,7 @@ tgl("message batana notification announce बताना", "an", true, "ANNOUNC
 
 sec("APP UPDATE")
 add("update naya version check download install अपडेट", neon("CHECK FOR UPDATE", CY) { Updater.check(this, true) })
-add("version build update", mono("Current build: " + Updater.cur(this), 11f, Color.parseColor("#9FE8FF"), false))
+add("version build update", mono("Current version: " + Updater.ver(Updater.cur(this)), 11f, Color.parseColor("#D6DCFF"), false))
 
 sec("DISPLAY")
 tgl("system log dikhao chhupao लॉग", "showlog", false, "SHOW SYSTEM LOG") {
@@ -280,7 +280,6 @@ panel.addView(st)
 root.addView(ScrollView(this).apply { addView(col) }, FrameLayout.LayoutParams(-1, -1))
 
 if (b == null) {
-RoboSound.boot()
 val splash = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02030A")); isClickable = true; alpha = 0f }
 splash.addView(MajinIntro(this), FrameLayout.LayoutParams(-1, -1))
 root.addView(splash, FrameLayout.LayoutParams(-1, -1))
@@ -362,7 +361,7 @@ cvLab?.text = "Clone failed: " + msg
 }
 private fun lock(root: FrameLayout) {
 val sp = getSharedPreferences("j", MODE_PRIVATE)
-val ov = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02070D")); isClickable = true }
+val ov = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#05060F")); isClickable = true }
 val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(24), dp(48), dp(24), dp(24)) }
 c.addView(OrbView(this), LinearLayout.LayoutParams(-1, dp(220)))
 c.addView(mono("ACTIVATION REQUIRED", 17f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.12f; setPadding(0, dp(16), 0, dp(8)) })

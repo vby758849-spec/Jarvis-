@@ -117,10 +117,9 @@ class MajinIntro(c: Context) : View(c) {
         for (i in 0 until 5) {
             val q = cl((t - (2.25f + i * 0.2f)) / 0.8f)
             if (q > 0f) {
-                p.alpha = (255 * q).toInt()
-                cv.save(); cv.clipRect(x - 4f * u, base - 100f * u, x + ws[i] * q + 2f * u, base + 20f * u)
-                cv.drawText(letters[i].toString(), x, base, p)
-                cv.restore()
+                val qe = 1f - (1f - q) * (1f - q)
+                p.alpha = (255 * qe).toInt()
+                cv.drawText(letters[i].toString(), x - (1f - qe) * 18f * u, base, p)
             }
             x += ws[i] + gap
         }
@@ -231,6 +230,33 @@ class OrbView(c: Context) : View(c) {
         p.strokeWidth = r * 0.035f; p.color = 0xBBFFFFFF.toInt(); p.strokeCap = Paint.Cap.ROUND
         rect.set(cx - r * 0.9f, cy - r * 0.9f, cx + r * 0.9f, cy + r * 0.9f)
         cv.drawArc(rect, 200f + t * 20f, 40f, false, p)
+        postInvalidateOnAnimation()
+    }
+}
+
+/** Premium dark background: deep indigo gradient with slow violet and amber glows. */
+class PremiumBg(c: Context) : View(c) {
+    private val t0 = System.currentTimeMillis()
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var lin: LinearGradient? = null
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        lin = LinearGradient(0f, 0f, 0f, h.toFloat(), intArrayOf(0xFF06071A.toInt(), 0xFF0A0B24.toInt(), 0xFF05060F.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        if (w <= 0f) return
+        val t = (System.currentTimeMillis() - t0) / 1000f
+        p.reset(); p.isAntiAlias = true; p.shader = lin
+        cv.drawRect(0f, 0f, w, h, p)
+        val r = max(w, h) * 0.55f
+        val ax = w * (0.85f + 0.06f * sin(t * 0.25f)); val ay = h * (0.08f + 0.03f * cos(t * 0.2f))
+        p.shader = RadialGradient(ax, ay, r, intArrayOf(0x447A5CFF, 0x00000000), null, Shader.TileMode.CLAMP)
+        cv.drawRect(0f, 0f, w, h, p)
+        val bx = w * (0.1f + 0.06f * cos(t * 0.22f)); val by = h * (0.95f + 0.03f * sin(t * 0.27f))
+        p.shader = RadialGradient(bx, by, r * 0.9f, intArrayOf(0x33FF9A3C, 0x00000000), null, Shader.TileMode.CLAMP)
+        cv.drawRect(0f, 0f, w, h, p)
         postInvalidateOnAnimation()
     }
 }

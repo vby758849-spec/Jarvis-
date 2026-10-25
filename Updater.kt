@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.net.URL
 object Updater {
+    fun ver(n: Long): String = "v1." + n
+
 private const val API = "https://api.github.com/repos/vby758849-spec/Jarvis-/releases/tags/latest"
 private const val APK = "https://github.com/vby758849-spec/Jarvis-/releases/download/latest/Jarvis.apk"
 private const val ACT = "com.vaibhav.jarvis.INSTALL_DONE"
@@ -92,7 +94,7 @@ val j = JSONObject(c.inputStream.bufferedReader().readText())
 val n = Regex("\\d+").find(j.optString("body"))?.value?.toLongOrNull() ?: 0L
 h.post {
 if (!a.isFinishing) {
-if (n > cur(a)) ask(a, n) else if (manual) Toast.makeText(a, "You are up to date (build " + cur(a) + ")", Toast.LENGTH_LONG).show()
+if (n > cur(a)) ask(a, n) else if (manual) Toast.makeText(a, "You are up to date (" + ver(cur(a)) + ")", Toast.LENGTH_LONG).show()
 }
 }
 } catch (e: Exception) { if (manual) toast(a, "Could not check for updates") }
@@ -100,7 +102,7 @@ if (n > cur(a)) ask(a, n) else if (manual) Toast.makeText(a, "You are up to date
 }
 private fun ask(a: Activity, n: Long) {
 AlertDialog.Builder(a).setTitle("Update available")
-.setMessage("Build " + n + " is ready (you have build " + cur(a) + "). Update now?")
+.setMessage("Version " + ver(n) + " is ready (you have " + ver(cur(a)) + "). Update now?")
 .setNegativeButton("Later", null)
 .setPositiveButton("Update") { _, _ -> install(a) }
 .show()
