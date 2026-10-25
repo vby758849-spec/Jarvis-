@@ -43,6 +43,9 @@ companion object {
 @Volatile var igText = ""
 @Volatile var igAt = 0L
 @Volatile var ytAt = 0L
+@Volatile var orbSpeak = false
+@Volatile var orbLevel = 0f
+@Volatile var orbLevelAt = 0L
 @Volatile var btWant = 0
 @Volatile var btAt = 0L
 @Volatile var btName = ""
@@ -114,9 +117,9 @@ if (it == TextToSpeech.SUCCESS) {
 tts?.language = Locale("hi", "IN")
 applyVoice()
 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-override fun onStart(id: String?) { speaking = true; vSvc?.setPause(true) }
-override fun onDone(id: String?) { if (id == "u") { speaking = false; vSvc?.setPause(false); h.post { unstyle(); afterSpeech() } } }
-@Deprecated("x") override fun onError(id: String?) { speaking = false; h.post { unstyle() } }
+override fun onStart(id: String?) { speaking = true; orbSpeak = true; vSvc?.setPause(true) }
+override fun onDone(id: String?) { if (id == "u") { speaking = false; orbSpeak = false; vSvc?.setPause(false); h.post { unstyle(); afterSpeech() } } }
+@Deprecated("x") override fun onError(id: String?) { speaking = false; orbSpeak = false; h.post { unstyle() } }
 })
 ttsReady = true
 }
@@ -144,10 +147,10 @@ val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
 val mx = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
 if (!sp.getBoolean("manvol", false) && am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) < mx * 0.7) am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (mx * 0.8).toInt(), 0)
 } catch (e: Exception) { }
-speaking = true
+speaking = true; orbSpeak = true
 if (CloneVoice.active(sp)) {
 vSvc?.setPause(true)
-CloneVoice.speak(this, sp, if (isEn()) t else t0, { speaking = false; vSvc?.setPause(false); h.post { unstyle(); afterSpeech() } }, { speakMixed(t) })
+CloneVoice.speak(this, sp, if (isEn()) t else t0, { speaking = false; orbSpeak = false; vSvc?.setPause(false); h.post { unstyle(); afterSpeech() } }, { speakMixed(t) })
 return
 }
 speakMixed(t)
@@ -271,7 +274,7 @@ h.postDelayed({ next() }, 600)
 }
 override fun onReadyForSpeech(p: Bundle?) {}
 override fun onBeginningOfSpeech() {}
-override fun onRmsChanged(r: Float) {}
+override fun onRmsChanged(r: Float) { orbLevel = (r / 10f).coerceIn(0f, 1f); orbLevelAt = System.currentTimeMillis() }
 override fun onBufferReceived(b: ByteArray?) {}
 override fun onEndOfSpeech() {}
 override fun onPartialResults(p: Bundle?) {}

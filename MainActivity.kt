@@ -71,8 +71,8 @@ root.addView(GridBg(this), FrameLayout.LayoutParams(-1, -1))
 val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(40), dp(18), dp(28)) }
 col.addView(mono("J.A.R.V.I.S", 26f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.25f })
 col.addView(mono("JUST A RATHER VERY INTELLIGENT SYSTEM", 9f, Color.parseColor("#5FA8B8"), false).apply { gravity = Gravity.CENTER; letterSpacing = 0.1f })
-val robo = RoboHead(this)
-col.addView(robo, LinearLayout.LayoutParams(-1, dp(190)).apply { topMargin = dp(14) })
+val robo = OrbView(this)
+col.addView(robo, LinearLayout.LayoutParams(-1, dp(220)).apply { topMargin = dp(10) })
 val panel = col
 val status = mono("OFFLINE", 14f, DIM, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.3f; setPadding(0, dp(10), 0, dp(10)) }
 panel.addView(status)
@@ -281,15 +281,10 @@ root.addView(ScrollView(this).apply { addView(col) }, FrameLayout.LayoutParams(-
 
 if (b == null) {
 RoboSound.boot()
-val splash = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02070D")); isClickable = true; alpha = 0f }
-splash.addView(GridBg(this), FrameLayout.LayoutParams(-1, -1))
-val big = RoboHead(this)
-splash.addView(big, FrameLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels * 0.55f).toInt(), Gravity.CENTER_VERTICAL).apply { bottomMargin = dp(60) })
-val bt = mono("INITIALIZING...", 13f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.3f }
-splash.addView(bt, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(90) })
+val splash = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02030A")); isClickable = true; alpha = 0f }
+splash.addView(MajinIntro(this), FrameLayout.LayoutParams(-1, -1))
 root.addView(splash, FrameLayout.LayoutParams(-1, -1))
-splash.animate().alpha(1f).setDuration(400).start()
-splash.postDelayed({ big.on = true; bt.text = "SYSTEMS ONLINE" }, 1500)
+splash.animate().alpha(1f).setDuration(300).start()
 var gone = false
 val close: () -> Unit = {
 if (!gone) {
@@ -299,7 +294,7 @@ splash.animate().alpha(0f).setDuration(500).withEndAction { root.removeView(spla
 }
 }
 splash.setOnClickListener { close() }
-splash.postDelayed({ close() }, 3200)
+splash.postDelayed({ close() }, 8300)
 if (sp.getString("lang", "en") == "en") vc().speakEn("Hello sir, I am Jarvis. All systems are online.") else vc().speak("नमस्ते सर, मैं जार्विस हूँ। सभी सिस्टम ऑनलाइन हैं।")
 }
 setContentView(root)
@@ -369,7 +364,7 @@ private fun lock(root: FrameLayout) {
 val sp = getSharedPreferences("j", MODE_PRIVATE)
 val ov = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02070D")); isClickable = true }
 val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(24), dp(48), dp(24), dp(24)) }
-c.addView(RoboHead(this), LinearLayout.LayoutParams(-1, dp(190)))
+c.addView(OrbView(this), LinearLayout.LayoutParams(-1, dp(220)))
 c.addView(mono("ACTIVATION REQUIRED", 17f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.12f; setPadding(0, dp(16), 0, dp(8)) })
 c.addView(mono("Send this Device ID to the seller to get your licence code:", 12f, Color.WHITE, false).apply { gravity = Gravity.CENTER })
 val id = License.deviceId(this)
