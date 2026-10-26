@@ -619,14 +619,19 @@ try {
 val am = callAm()
 am.isSpeakerphoneOn = on
 if (on) {
-am.setStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, am.getStreamMaxVolume(android.media.AudioManager.STREAM_VOICE_CALL), 0)
-am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) * 0.9).toInt(), 0)
+for (st in intArrayOf(android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.STREAM_ALARM))
+am.setStreamVolume(st, am.getStreamMaxVolume(st), 0)
 }
+lg("call audio: speaker=" + am.isSpeakerphoneOn + " mode=" + am.mode + " path=" + sp.getString("cpath", "alarm"))
 } catch (e: Exception) { lg("speaker: " + e) }
 try {
-tts?.setAudioAttributes(android.media.AudioAttributes.Builder()
-.setUsage(if (on) android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION else android.media.AudioAttributes.USAGE_ASSISTANT)
-.setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+val path = sp.getString("cpath", "alarm")
+val use = if (!on) android.media.AudioAttributes.USAGE_MEDIA else when (path) {
+"voice" -> android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION
+"media" -> android.media.AudioAttributes.USAGE_MEDIA
+else -> android.media.AudioAttributes.USAGE_ALARM
+}
+tts?.setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(use).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
 } catch (e: Exception) { }
 }
 private fun callBegin(who: String) {
@@ -642,7 +647,7 @@ smsOwner("Jarvis ne " + who + " ka call utha liya. Baat-cheet ke update aate rah
 callNote("Call: " + who, "Answered by Jarvis")
 val g = if (sp.getString("arm", "p") == "b") "Hello, this is the AI assistant of " + callBn() + ". How can I help you?"
 else "Hello, this is Jarvis, the AI assistant of " + callOwn() + ". " + callOwn() + " is not available right now. How may I help you?"
-h.postDelayed({ if (callOn) say(g) }, 1500)
+h.postDelayed({ if (callOn) { lg("call: greeting bol raha hu"); say(g) } }, 1500)
 callWatch()
 }
 private fun callWatch() {
@@ -656,6 +661,7 @@ callWatch()
 }, 1500)
 }
 private fun callAfterSpeech() {
+lg("call: bolna khatam, ab sun raha hu")
 callLast = System.currentTimeMillis()
 if (callTakeAfter) { callTakeAfter = false; callTake(); return }
 if (callEndAfter) { callEnd(true); return }
@@ -670,6 +676,7 @@ h.postDelayed({ if (callOn && !speaking) listen() }, 500)
 }
 private fun callHear(t: String) {
 callLast = System.currentTimeMillis()
+lg("call: caller ne suna: " + t)
 if (t.isBlank()) { callQuiet(); return }
 callSilent = 0
 val s = t.lowercase()

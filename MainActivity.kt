@@ -255,6 +255,11 @@ fun shD() { dl.text = "ANSWER AFTER: " + sp.getInt("acd", 4) + " SEC" }
 shD()
 dl.setOnClickListener { val n = sp.getInt("acd", 4); sp.edit().putInt("acd", if (n >= 10) 2 else n + 2).apply(); shD() }
 add("answer delay seconds kitni der baad", dl)
+val cp = neon("", CY) { }
+fun shC() { cp.text = "CALL VOICE PATH: " + when (sp.getString("cpath", "alarm")) { "media" -> "MEDIA"; "voice" -> "CALL"; else -> "ALARM (recommended)" } }
+shC()
+cp.setOnClickListener { sp.edit().putString("cpath", when (sp.getString("cpath", "alarm")) { "alarm" -> "media"; "media" -> "voice"; else -> "alarm" }).apply(); shC() }
+add("call voice path audio route awaaz speaker nahi sunai", cp)
 val myn = field("Your number for call updates (SMS), e.g. +91XXXXXXXXXX", sp.getString("mynum", "") ?: "", false)
 add("my number sms update mobile", myn)
 add("save call number", neon("SAVE CALL SETTINGS", CY) {
