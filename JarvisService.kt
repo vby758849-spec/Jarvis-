@@ -599,6 +599,7 @@ val unsaved = who.firstOrNull()?.let { it == '+' || it.isDigit() } == true
 if (sp.getBoolean("acu", false) && !unsaved) return
 callPend = true
 lg("call aaya: " + who)
+if (sp.getInt("acm", 1) == 1) { callDecline(who); return }
 h.postDelayed({
 if (inCallMode() || callOn) { callPend = false; return@postDelayed }
 val a = callAccept()
@@ -606,6 +607,42 @@ lg("call: acceptRingingCall=" + a)
 if (!a) callHook()
 callWait(who, 0)
 }, sp.getInt("acd", 4) * 1000L)
+}
+private val callSmsAt = HashMap<String, Long>()
+private fun callNumber(who: String): String {
+val digits = who.filter { it.isDigit() || it == '+' }
+if (who.firstOrNull()?.let { it == '+' || it.isDigit() } == true && digits.length >= 6) return digits
+try {
+contentResolver.query(android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI, arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER),
+android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " = ?", arrayOf(who), null)?.use { c ->
+if (c.moveToFirst()) return c.getString(0)?.filter { it.isDigit() || it == '+' } ?: ""
+}
+} catch (e: Throwable) { lg("contact number: " + e) }
+return ""
+}
+private fun callDecline(who: String) {
+h.postDelayed({
+val ok = MsgListener.inst?.callAct(false) == true || try { if (Build.VERSION.SDK_INT >= 28) (getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager).endCall() else false } catch (e: Throwable) { lg("decline error: " + e); false }
+lg("call: decline=" + ok)
+val num = callNumber(who)
+val now = System.currentTimeMillis()
+var sent = false
+if (num.isNotEmpty() && now - (callSmsAt[num] ?: 0L) > 1800000L) {
+callSmsAt[num] = now
+val own = callOwn()
+val m = if (sp.getString("arm", "p") == "b") "Hello! Thank you for calling " + callBn() + ". We cannot take your call right now. Please send your message or requirement here and we will get back to you shortly. (AI assistant)"
+else "Hello, this is Jarvis, the AI assistant of " + own + ". " + own + " cannot take your call right now. Please send your message here and I will pass it on. Thank you."
+try {
+val sm = if (Build.VERSION.SDK_INT >= 31) getSystemService(SmsManager::class.java) else @Suppress("DEPRECATION") SmsManager.getDefault()
+sm.sendMultipartTextMessage(num, null, sm.divideMessage(m), null, null)
+sent = true
+} catch (e: Throwable) { lg("caller sms fail: " + e) }
+}
+lg("call: caller ko sms=" + sent + " num=" + (if (num.isEmpty()) "nahi mila" else "mila"))
+smsOwner("Missed call: " + who + ". Jarvis ne call decline kiya" + (if (sent) " aur unhe SMS bheja ki message chhod dein." else "."))
+callNote("Missed call: " + who, "Declined by Jarvis" + (if (sent) ", SMS sent to caller" else ""), true)
+h.postDelayed({ callPend = false }, 5000)
+}, 1500)
 }
 private fun callAccept(): Boolean {
 return try {

@@ -255,6 +255,11 @@ fun shD() { dl.text = "ANSWER AFTER: " + sp.getInt("acd", 4) + " SEC" }
 shD()
 dl.setOnClickListener { val n = sp.getInt("acd", 4); sp.edit().putInt("acd", if (n >= 10) 2 else n + 2).apply(); shD() }
 add("answer delay seconds kitni der baad", dl)
+val cm = neon("", CY) { }
+fun shCM() { cm.text = "WHEN A CALL COMES: " + (if (sp.getInt("acm", 1) == 1) "DECLINE + SMS THE CALLER" else "ANSWER & TALK (needs loudspeaker)") }
+shCM()
+cm.setOnClickListener { sp.edit().putInt("acm", if (sp.getInt("acm", 1) == 1) 0 else 1).apply(); shCM() }
+add("call mode decline sms answer talk call aaye to kya kare", cm)
 val cp = neon("", CY) { }
 fun shC() { cp.text = "CALL VOICE PATH: " + when (sp.getString("cpath2", "alarm")) { "media" -> "MEDIA"; "voice" -> "CALL"; else -> "ALARM (recommended)" } }
 shC()
