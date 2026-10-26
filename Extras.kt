@@ -224,6 +224,10 @@ override fun onServiceConnected() { JarvisService.lg("Accessibility chalu") }
 override fun onAccessibilityEvent(e: AccessibilityEvent?) {
 val root = rootInActiveWindow ?: return
 val now = System.currentTimeMillis()
+if (JarvisService.callOn && JarvisService.spkWant) {
+val pk0 = e?.packageName?.toString() ?: ""
+if (pk0.contains("dialer") || pk0.contains("incallui")) { if (now - lastSpk > 1200) { lastSpk = now; speakerClick(root) }; return }
+}
 if (e?.packageName?.toString() == "com.android.settings") { if (JarvisService.fsAt != 0L) { force(root, now); return }; if (JarvisService.btWant != 0 && now - JarvisService.btAt < 30000) bt(root); return }
 if (e?.packageName?.toString() == "com.google.android.youtube") {
 if (JarvisService.ytAt != 0L) { if (now - JarvisService.ytAt > 20000) JarvisService.ytAt = 0L else if (playFirst(root, now)) return }
@@ -259,6 +263,16 @@ JarvisService.fsStage = 1
 JarvisService.lg("Band: Force stop dabaya")
 }
 private var lastBt = 0L
+private var lastSpk = 0L
+private fun speakerClick(root: AccessibilityNodeInfo) {
+val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+if (am.isSpeakerphoneOn || JarvisService.spkTries >= 3) { JarvisService.spkWant = false; return }
+val n = root.findAccessibilityNodeInfosByText("Speaker").firstOrNull() ?: root.findAccessibilityNodeInfosByText("स्पीकर").firstOrNull() ?: return
+val c = up(n) ?: return
+c.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+JarvisService.spkTries++
+JarvisService.lg("call: Speaker button dabaya")
+}
 private var lastSk = 0L
 private var lastYt = 0L
 private fun findVid(n: AccessibilityNodeInfo?, re: Regex, d: Int): AccessibilityNodeInfo? {

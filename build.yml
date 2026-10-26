@@ -1,0 +1,272 @@
+name: Build Jarvis APK
+on:
+  workflow_dispatch:
+  push:
+jobs:
+ b:
+  runs-on: ubuntu-latest
+  permissions:
+   contents: write
+  steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-java@v4
+    with:
+     distribution: temurin
+     java-version: 17
+  - uses: gradle/actions/setup-gradle@v4
+    with:
+     gradle-version: 8.7
+  - run: |
+     cat > settings.gradle.kts <<'JEOF'
+     pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+     dependencyResolutionManagement { repositories { google(); mavenCentral() } }
+     rootProject.name = "Jarvis"
+     include(":app")
+     JEOF
+     cat > build.gradle.kts <<'JEOF'
+     plugins {
+      id("com.android.application") version "8.5.2" apply false
+      id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+     }
+     JEOF
+     cat > gradle.properties <<'JEOF'
+     org.gradle.jvmargs=-Xmx3g
+     android.nonTransitiveRClass=true
+     android.useAndroidX=true
+     JEOF
+     mkdir -p app
+     cat > app/build.gradle.kts <<'JEOF'
+     plugins {
+      id("com.android.application")
+      id("org.jetbrains.kotlin.android")
+     }
+     android {
+      namespace = "com.vaibhav.jarvis"
+      compileSdk = 34
+      defaultConfig {
+       applicationId = "com.vaibhav.jarvis"
+       minSdk = 26
+       targetSdk = 34
+       versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+       versionName = "1.0"
+       ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+      }
+      compileOptions {
+       sourceCompatibility = JavaVersion.VERSION_17
+       targetCompatibility = JavaVersion.VERSION_17
+      }
+      kotlinOptions { jvmTarget = "17" }
+      signingConfigs {
+       create("jv") {
+        storeFile = file("../jarvis.keystore")
+        storePassword = "jarvis123"
+        keyAlias = "jarvis"
+        keyPassword = "jarvis123"
+       }
+      }
+      buildTypes {
+       getByName("debug") { signingConfig = signingConfigs.getByName("jv") }
+      }
+     }
+     dependencies {
+      implementation("com.alphacephei:vosk-android:0.3.47")
+     }
+     JEOF
+     mkdir -p app/src/main
+     cat > app/src/main/AndroidManifest.xml <<'JEOF'
+     <?xml version="1.0" encoding="utf-8"?>
+     <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+      <uses-permission android:name="android.permission.RECORD_AUDIO" />
+      <uses-permission android:name="android.permission.CALL_PHONE" />
+      <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+      <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+      <uses-permission android:name="android.permission.READ_CALENDAR" />
+      <uses-permission android:name="android.permission.SEND_SMS" />
+      <uses-permission android:name="android.permission.READ_CONTACTS" />
+      <uses-permission android:name="android.permission.SET_ALARM" />
+      <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+      <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+      <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+      <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+      <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+      <uses-permission android:name="android.permission.INTERNET" />
+      <uses-permission android:name="android.permission.WAKE_LOCK" />
+      <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+      <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+      <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+      <application android:label="Jarvis" android:icon="@mipmap/ic_launcher" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+       <activity android:name=".MainActivity" android:exported="true">
+        <intent-filter>
+         <action android:name="android.intent.action.MAIN" />
+         <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+       </activity>
+       <service android:name=".JarvisService" android:exported="false"
+        android:foregroundServiceType="microphone" />
+       <service android:name=".MsgListener" android:exported="true" android:label="Jarvis"
+        android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+        <intent-filter>
+         <action android:name="android.service.notification.NotificationListenerService" />
+        </intent-filter>
+       </service>
+       <service android:name=".SendAcc" android:exported="true" android:label="Jarvis auto send"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+        <intent-filter>
+         <action android:name="android.accessibilityservice.AccessibilityService" />
+        </intent-filter>
+        <meta-data android:name="android.accessibilityservice" android:resource="@xml/acc" />
+       </service>
+      </application>
+     </manifest>
+     JEOF
+     mkdir -p app/src/main/res/xml
+     cat > app/src/main/res/xml/acc.xml <<'JEOF'
+     <?xml version="1.0" encoding="utf-8"?>
+     <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+      android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged"
+      android:accessibilityFeedbackType="feedbackGeneric"
+      android:accessibilityFlags="flagReportViewIds"
+      android:canRetrieveWindowContent="true"
+      android:packageNames="com.whatsapp,com.whatsapp.w4b,com.instagram.android,com.android.settings,com.google.android.youtube,com.google.android.dialer,com.android.incallui,com.samsung.android.incallui,com.android.dialer"
+      android:description="@string/acc_desc"
+      android:notificationTimeout="200" />
+     JEOF
+     mkdir -p app/src/main/res/values
+     cat > app/src/main/res/values/strings.xml <<'JEOF'
+     <?xml version="1.0" encoding="utf-8"?>
+     <resources>
+      <string name="acc_desc">Jarvis WhatsApp message apne aap bhejne ke liye</string>
+     </resources>
+     JEOF
+     mkdir -p app/src/main/res/mipmap-xxxhdpi
+     base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp <<'JEOF'
+     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
+     1Fccw8PQufcOBQ8AAAAA
+     JEOF
+     mkdir -p app/src/main/assets
+     curl -fL -o m.zip https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip || curl -fL -o m.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+     unzip -q m.zip -d mdl
+     mv mdl/* app/src/main/assets/model-en
+     echo uuid1 > app/src/main/assets/model-en/uuid
+     mkdir -p app/src/main/java/com/vaibhav/jarvis
+     cp *.kt app/src/main/java/com/vaibhav/jarvis/
+     mkdir -p app/src/main/res/drawable-nodpi
+     cp hud.jpg blueprint.jpg app/src/main/res/drawable-nodpi/ || true
+  - run: gradle assembleDebug --no-daemon
+  - uses: actions/upload-artifact@v4
+    with:
+     name: jarvis-apk
+     path: app/build/outputs/apk/debug/app-debug.apk
+     
+  - run: |
+     cp app/build/outputs/apk/debug/app-debug.apk Jarvis.apk
+     gh release delete latest --cleanup-tag -y || true
+     gh release create latest Jarvis.apk --title "Jarvis build ${{ github.run_number }}" --notes "${{ github.run_number }}"
+    env:
+     GH_TOKEN: ${{ github.token }}

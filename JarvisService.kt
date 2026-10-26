@@ -45,6 +45,8 @@ companion object {
 @Volatile var ytAt = 0L
 @Volatile var orbSpeak = false
 @Volatile var callOn = false
+@Volatile var spkWant = false
+@Volatile var spkTries = 0
 @Volatile var orbLevel = 0f
 @Volatile var orbLevelAt = 0L
 @Volatile var btWant = 0
@@ -630,15 +632,21 @@ h.postDelayed({ callWait(who, n + 1) }, 400)
 private fun callAudio(on: Boolean) {
 try {
 val am = callAm()
-am.isSpeakerphoneOn = on
 if (on) {
+if (Build.VERSION.SDK_INT >= 31) {
+try { am.availableCommunicationDevices.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }?.let { am.setCommunicationDevice(it) } } catch (e: Throwable) { lg("comm device: " + e) }
+}
+am.isSpeakerphoneOn = true
 for (st in intArrayOf(android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.STREAM_ALARM))
 am.setStreamVolume(st, am.getStreamMaxVolume(st), 0)
+} else {
+if (Build.VERSION.SDK_INT >= 31) { try { am.clearCommunicationDevice() } catch (e: Throwable) { } }
+am.isSpeakerphoneOn = false
 }
-lg("call audio: speaker=" + am.isSpeakerphoneOn + " mode=" + am.mode + " path=" + sp.getString("cpath", "alarm"))
+lg("call audio: speaker=" + am.isSpeakerphoneOn + " mode=" + am.mode + " path=" + sp.getString("cpath2", "alarm"))
 } catch (e: Exception) { lg("speaker: " + e) }
 try {
-val path = sp.getString("cpath", "alarm")
+val path = sp.getString("cpath2", "alarm")
 val use = if (!on) android.media.AudioAttributes.USAGE_MEDIA else when (path) {
 "voice" -> android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION
 "media" -> android.media.AudioAttributes.USAGE_MEDIA
@@ -655,12 +663,13 @@ val sv = vSvc; vSvc = null
 try { sv?.stop(); sv?.shutdown() } catch (e: Exception) { }
 try { sr.cancel() } catch (e: Exception) { }
 awake = false; tk++
-for (d in longArrayOf(300, 1200, 2500)) h.postDelayed({ if (callOn) callAudio(true) }, d)
+spkWant = true; spkTries = 0
+for (d in longArrayOf(200, 900, 1800, 3000, 4500, 6500)) h.postDelayed({ if (callOn && !callAm().isSpeakerphoneOn) callAudio(true) }, d)
 smsOwner("Jarvis ne " + who + " ka call utha liya. Baat-cheet ke update aate rahenge. Khud baat karni ho to notification mein TAKE OVER dabao ya bolo: Jarvis, call mujhe do.")
 callNote("Call: " + who, "Answered by Jarvis")
 val g = if (sp.getString("arm", "p") == "b") "Hello, this is the AI assistant of " + callBn() + ". How can I help you?"
 else "Hello, this is Jarvis, the AI assistant of " + callOwn() + ". " + callOwn() + " is not available right now. How may I help you?"
-h.postDelayed({ if (callOn) { lg("call: greeting bol raha hu"); say(g) } }, 1500)
+h.postDelayed({ if (callOn) { lg("call: greeting bol raha hu"); say(g) } }, 2200)
 callWatch()
 }
 private fun callWatch() {
@@ -718,7 +727,7 @@ if (!callOn) return
 callHist.add(t to r); while (callHist.size > 8) callHist.removeAt(0)
 callLines.add("Jarvis: " + r)
 if (callSmsN < 8 || urgent) { callSmsN++; smsOwner((if (urgent) "URGENT! " else "") + callWho + " | Caller: " + t + "\nJarvis: " + r) }
-callNote("Call: " + callWho, "Caller: " + t)
+callNote("Call: " + callWho, callLines.takeLast(6).joinToString("\n"))
 callEndAfter = end
 say(r)
 }
@@ -729,7 +738,7 @@ say("One moment please, " + callOwn() + " is joining the call.")
 }
 private fun callTake() {
 if (!callOn) return
-callOn = false
+callOn = false; spkWant = false
 try { tts?.stop() } catch (e: Exception) { }
 speaking = false; orbSpeak = false
 callAudio(false)
@@ -739,6 +748,7 @@ h.post { next() }
 }
 private fun callEnd(hangup: Boolean) {
 if (!callOn) return
+spkWant = false
 callOn = false; callTakeAfter = false
 if (hangup) {
 try { if (Build.VERSION.SDK_INT >= 28) (getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager).endCall() } catch (e: Exception) { MsgListener.inst?.callAct(false) }
@@ -772,7 +782,7 @@ try {
 val nm = getSystemService(NotificationManager::class.java)
 nm.createNotificationChannel(NotificationChannel("jcall", "Jarvis calls", NotificationManager.IMPORTANCE_HIGH))
 val pi = PendingIntent.getService(this, 78, Intent(this, JarvisService::class.java).setAction("TAKE"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-val b = Notification.Builder(this, "jcall").setContentTitle(title).setContentText(text).setSmallIcon(android.R.drawable.ic_menu_call).setOnlyAlertOnce(!alert)
+val b = Notification.Builder(this, "jcall").setContentTitle(title).setContentText(text.lineSequence().lastOrNull() ?: text).setStyle(Notification.BigTextStyle().bigText(text)).setSmallIcon(android.R.drawable.ic_menu_call).setOnlyAlertOnce(!alert)
 if (!alert) b.addAction(Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_menu_call), "TAKE OVER", pi).build()).setOngoing(true)
 nm.notify(78, b.build())
 } catch (e: Exception) { lg("note: " + e) }
