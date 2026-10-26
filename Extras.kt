@@ -91,6 +91,17 @@ class MsgListener : NotificationListenerService() {
 companion object { @Volatile var inst: MsgListener? = null }
 override fun onListenerConnected() { inst = this }
 override fun onListenerDisconnected() { inst = null }
+fun callConnected(): Boolean {
+for (sbn in activeNotifications ?: return false) {
+if (sbn.packageName == packageName) continue
+val n = sbn.notification
+if (n.category != Notification.CATEGORY_CALL) continue
+val acts = n.actions ?: continue
+val ans = acts.any { Regex("answer|accept|pick|उठा|जवाब|रिसीव|उत्तर").containsMatchIn(it.title?.toString()?.lowercase() ?: "") }
+if (!ans) return true
+}
+return false
+}
 fun callAct(accept: Boolean): Boolean {
 for (sbn in activeNotifications ?: return false) {
 if (sbn.packageName == packageName) continue

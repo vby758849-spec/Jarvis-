@@ -599,8 +599,8 @@ callPend = true
 lg("call aaya: " + who)
 h.postDelayed({
 if (inCallMode() || callOn) { callPend = false; return@postDelayed }
-val ok = MsgListener.inst?.callAct(true) == true || callAccept()
-if (!ok) { callPend = false; lg("call: utha nahi paya"); return@postDelayed }
+val a = callAccept()
+lg("call: acceptRingingCall=" + a)
 callWait(who, 0)
 }, sp.getInt("acd", 4) * 1000L)
 }
@@ -610,8 +610,9 @@ if (checkSelfPermission(android.Manifest.permission.ANSWER_PHONE_CALLS) == Packa
 } else false
 } catch (e: Exception) { false }
 private fun callWait(who: String, n: Int) {
-if (inCallMode()) { callPend = false; callBegin(who); return }
-if (n > 16) { callPend = false; lg("call: connect nahi hua"); return }
+if (inCallMode() || MsgListener.inst?.callConnected() == true) { callPend = false; lg("call: connect ho gaya"); callBegin(who); return }
+if (n > 22) { callPend = false; lg("call: connect nahi hua (mode=" + callAm().mode + ")"); return }
+if (n == 4 || n == 10 || n == 16) { val ok = MsgListener.inst?.callAct(true) == true; val t = callAccept(); lg("call: dobara koshish notif=" + ok + " tm=" + t) }
 h.postDelayed({ callWait(who, n + 1) }, 400)
 }
 private fun callAudio(on: Boolean) {
