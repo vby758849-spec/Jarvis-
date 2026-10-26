@@ -44,6 +44,7 @@ companion object {
 @Volatile var igAt = 0L
 @Volatile var ytAt = 0L
 @Volatile var orbSpeak = false
+@Volatile var callOn = false
 @Volatile var orbLevel = 0f
 @Volatile var orbLevelAt = 0L
 @Volatile var btWant = 0
@@ -95,6 +96,7 @@ private var off = false
 override fun onBind(i: Intent?): IBinder? = null
 override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
 if (i?.action == "STOP") { stopSelf(); return START_NOT_STICKY }
+if (i?.action == "TAKE") { h.post { callTakeSay() }; return START_STICKY }
 return START_STICKY
 }
 override fun onCreate() {
@@ -197,6 +199,7 @@ StorageService.Callback<Model> { m -> h.post { lg("Vosk model taiyar"); vModel =
 StorageService.Callback<java.io.IOException> { e -> h.post { Toast.makeText(this, "Offline wake fail: " + e.message, Toast.LENGTH_LONG).show(); listen() } })
 }
 private fun startWake() {
+if (callOn) return
 val m = vModel ?: run { listen(); return }
 try {
 vSvc?.shutdown()
@@ -229,6 +232,7 @@ h.post { wakeHit(false) }; return
 }
 private var convFollow = false
 private fun afterSpeech() {
+if (callOn) { callAfterSpeech(); return }
 if (!sp.getBoolean("conv", true) || playing() || annWait || stopping) return
 convFollow = true
 if (vSvc != null) wakeHit(true)
@@ -245,6 +249,7 @@ if (!quiet) say("जी बॉस?")
 h.postDelayed({ listen() }, 60)
 }
 private fun next() {
+if (callOn) { h.postDelayed({ listen() }, 300); return }
 if (vModel != null && !awake) startWake() else h.postDelayed({ listen() }, 150)
 }
 private fun listen() {
@@ -260,6 +265,7 @@ try { sr.startListening(i) } catch (e: Exception) { h.postDelayed({ listen() }, 
 }
 override fun onResults(b: Bundle?) {
 off = false
+if (callOn) { callHear(b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""); return }
 val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
 (l?.firstOrNull { wake.containsMatchIn(it.lowercase()) } ?: l?.firstOrNull())?.let { process(it.lowercase()) }
 next()
@@ -267,6 +273,7 @@ next()
 override fun onError(e: Int) {
 lg("SR error " + e)
 sr.cancel()
+if (callOn) { callQuiet(); return }
 if (e == 12 || e == 13) LANG = "en-IN"
 if (e == 1 || e == 2) off = true
 awake = false; tk++
@@ -566,6 +573,189 @@ catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 "volume" -> volume(j.optString("query").lowercase())
 else -> say(j.optString("say"))
 }
+}
+// ---------- CALL ASSISTANT ----------
+private var callWho = ""
+private var callT0 = 0L
+private var callTurns = 0
+private var callSmsN = 0
+private var callSilent = 0
+private var callLast = 0L
+private var callPend = false
+private var callEndAfter = false
+private var callTakeAfter = false
+private val callHist = ArrayList<Pair<String, String>>()
+private val callLines = ArrayList<String>()
+private fun callOwn() = sp.getString("owner", "")?.trim().orEmpty().ifEmpty { "the owner" }
+private fun callBn() = sp.getString("bn", "")?.trim().orEmpty().ifEmpty { "our business" }
+private fun callAm() = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+private fun inCallMode(): Boolean { val m = callAm().mode; return m == android.media.AudioManager.MODE_IN_CALL || m == android.media.AudioManager.MODE_IN_COMMUNICATION }
+
+fun callIncoming(who: String) {
+if (callOn || callPend || !sp.getBoolean("autocall", false)) return
+val unsaved = who.firstOrNull()?.let { it == '+' || it.isDigit() } == true
+if (sp.getBoolean("acu", false) && !unsaved) return
+callPend = true
+lg("call aaya: " + who)
+h.postDelayed({
+if (inCallMode() || callOn) { callPend = false; return@postDelayed }
+val ok = MsgListener.inst?.callAct(true) == true || callAccept()
+if (!ok) { callPend = false; lg("call: utha nahi paya"); return@postDelayed }
+callWait(who, 0)
+}, sp.getInt("acd", 4) * 1000L)
+}
+private fun callAccept(): Boolean = try {
+if (checkSelfPermission(android.Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {
+(getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager).acceptRingingCall(); true
+} else false
+} catch (e: Exception) { false }
+private fun callWait(who: String, n: Int) {
+if (inCallMode()) { callPend = false; callBegin(who); return }
+if (n > 16) { callPend = false; lg("call: connect nahi hua"); return }
+h.postDelayed({ callWait(who, n + 1) }, 400)
+}
+private fun callAudio(on: Boolean) {
+try {
+val am = callAm()
+am.isSpeakerphoneOn = on
+if (on) {
+am.setStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, am.getStreamMaxVolume(android.media.AudioManager.STREAM_VOICE_CALL), 0)
+am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) * 0.9).toInt(), 0)
+}
+} catch (e: Exception) { lg("speaker: " + e) }
+try {
+tts?.setAudioAttributes(android.media.AudioAttributes.Builder()
+.setUsage(if (on) android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION else android.media.AudioAttributes.USAGE_ASSISTANT)
+.setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+} catch (e: Exception) { }
+}
+private fun callBegin(who: String) {
+callOn = true
+callWho = who; callT0 = System.currentTimeMillis(); callTurns = 0; callSmsN = 0; callSilent = 0; callLast = callT0
+callEndAfter = false; callTakeAfter = false; callHist.clear(); callLines.clear()
+val sv = vSvc; vSvc = null
+try { sv?.stop(); sv?.shutdown() } catch (e: Exception) { }
+try { sr.cancel() } catch (e: Exception) { }
+awake = false; tk++
+for (d in longArrayOf(300, 1200, 2500)) h.postDelayed({ if (callOn) callAudio(true) }, d)
+smsOwner("Jarvis ne " + who + " ka call utha liya. Baat-cheet ke update aate rahenge. Khud baat karni ho to notification mein TAKE OVER dabao ya bolo: Jarvis, call mujhe do.")
+callNote("Call: " + who, "Answered by Jarvis")
+val g = if (sp.getString("arm", "p") == "b") "Hello, this is the AI assistant of " + callBn() + ". How can I help you?"
+else "Hello, this is Jarvis, the AI assistant of " + callOwn() + ". " + callOwn() + " is not available right now. How may I help you?"
+h.postDelayed({ if (callOn) say(g) }, 1500)
+callWatch()
+}
+private fun callWatch() {
+h.postDelayed({
+if (!callOn) return@postDelayed
+val now = System.currentTimeMillis()
+if (now - callT0 > 5000 && !inCallMode()) { callEnd(false); return@postDelayed }
+if (now - callT0 > 300000) { say("I have to end the call now. " + callOwn() + " will get back to you."); callEndAfter = true }
+else if (!speaking && now - callLast > 15000) { callLast = now; try { sr.cancel() } catch (e: Exception) { }; listen() }
+callWatch()
+}, 1500)
+}
+private fun callAfterSpeech() {
+callLast = System.currentTimeMillis()
+if (callTakeAfter) { callTakeAfter = false; callTake(); return }
+if (callEndAfter) { callEnd(true); return }
+h.postDelayed({ if (callOn) listen() }, 350)
+}
+private fun callQuiet() {
+if (!callOn) return
+callSilent++
+if (callSilent == 3 && !speaking) { say("Hello? Are you there?"); return }
+if (callSilent >= 7 && !speaking) { callEndAfter = true; say("I cannot hear you clearly. I will let " + callOwn() + " know that you called. Goodbye."); return }
+h.postDelayed({ if (callOn && !speaking) listen() }, 500)
+}
+private fun callHear(t: String) {
+callLast = System.currentTimeMillis()
+if (t.isBlank()) { callQuiet(); return }
+callSilent = 0
+val s = t.lowercase()
+if (Regex("(jarvis|जार्विस).*(mujhe|मुझे|me\\b|take|hand)|(call|कॉल|फोन).*(mujhe|मुझे) (do|de|दो|दे)|मैं बात करता|give me the (call|phone)").containsMatchIn(s)) { callTakeSay(); return }
+callTurns++
+val k = sp.getString("key", "")?.trim().orEmpty()
+if (k.isEmpty()) {
+callLines.add("Caller: " + t)
+callReply(t, "Noted. I will pass your message to " + callOwn() + ".", callTurns >= 2, false)
+return
+}
+val biz = sp.getString("arm", "p") == "b"
+val bizInfo = "Business name: " + callBn() + ". What we do/sell: " + (sp.getString("bd", "") ?: "") + ". Prices: " + (sp.getString("bp", "") ?: "") + ". Working hours: " + (sp.getString("bh", "") ?: "") + ". Address/city: " + (sp.getString("ba", "") ?: "") + ". How to order/contact: " + (sp.getString("bc", "") ?: "") + ". Extra rules/FAQ: " + (sp.getString("bx", "") ?: "")
+val sys = Tr.csys(callOwn(), biz, callBn(), bizInfo, sp.getString("prof", "") ?: "")
+val hist = ArrayList(callHist)
+callLines.add("Caller: " + t)
+Thread {
+val raw = Gemini.call(k, sys, hist, "Caller (" + callWho + ") said: " + t)
+val jo = try { if (raw == null) null else JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { null }
+val r = jo?.optString("reply").orEmpty().ifBlank { "Sorry, could you please repeat that?" }
+h.post { callReply(t, r, jo?.optBoolean("end") == true, jo?.optBoolean("urgent") == true) }
+}.start()
+}
+private fun callReply(t: String, r: String, end: Boolean, urgent: Boolean) {
+if (!callOn) return
+callHist.add(t to r); while (callHist.size > 8) callHist.removeAt(0)
+callLines.add("Jarvis: " + r)
+if (callSmsN < 8 || urgent) { callSmsN++; smsOwner((if (urgent) "URGENT! " else "") + callWho + " | Caller: " + t + "\nJarvis: " + r) }
+callNote("Call: " + callWho, "Caller: " + t)
+callEndAfter = end
+say(r)
+}
+private fun callTakeSay() {
+if (!callOn) return
+callTakeAfter = true
+say("One moment please, " + callOwn() + " is joining the call.")
+}
+private fun callTake() {
+if (!callOn) return
+callOn = false
+try { tts?.stop() } catch (e: Exception) { }
+speaking = false; orbSpeak = false
+callAudio(false)
+smsOwner("Call aapko de diya. Ab aap baat kijiye.")
+callNote("Call is yours", "Put the phone to your ear", true)
+h.post { next() }
+}
+private fun callEnd(hangup: Boolean) {
+if (!callOn) return
+callOn = false; callTakeAfter = false
+if (hangup) {
+try { if (Build.VERSION.SDK_INT >= 28) (getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager).endCall() } catch (e: Exception) { MsgListener.inst?.callAct(false) }
+}
+try { tts?.stop() } catch (e: Exception) { }
+speaking = false; orbSpeak = false
+callAudio(false)
+try { getSystemService(NotificationManager::class.java).cancel(78) } catch (e: Exception) { }
+val sec = (System.currentTimeMillis() - callT0) / 1000
+val dur = (sec / 60).toString() + ":" + String.format("%02d", sec % 60)
+val lines = ArrayList(callLines); val who = callWho
+val k = sp.getString("key", "")?.trim().orEmpty()
+Thread {
+var sum: String? = null
+if (k.isNotEmpty() && lines.isNotEmpty()) sum = try { Gemini.info(k, "You summarise phone call transcripts in 2 short sentences in simple Hinglish (Roman letters). Mention who called, what they wanted and any action needed. No markdown.", emptyList(), lines.joinToString("\n")) } catch (e: Exception) { null }
+val body = if (!sum.isNullOrBlank()) sum.trim() else if (lines.isEmpty()) "Caller ne kuch nahi bola." else lines.takeLast(2).joinToString(" / ")
+smsOwner("Call khatam (" + who + ", " + dur + "). Summary: " + body)
+}.start()
+h.post { next() }
+}
+private fun smsOwner(text: String) {
+val num = sp.getString("mynum", "")?.trim().orEmpty()
+if (num.isEmpty()) return
+try {
+val sm = if (Build.VERSION.SDK_INT >= 31) getSystemService(SmsManager::class.java) else @Suppress("DEPRECATION") SmsManager.getDefault()
+sm.sendMultipartTextMessage(num, null, sm.divideMessage(text), null, null)
+} catch (e: Exception) { lg("sms fail: " + e) }
+}
+private fun callNote(title: String, text: String, alert: Boolean = false) {
+try {
+val nm = getSystemService(NotificationManager::class.java)
+nm.createNotificationChannel(NotificationChannel("jcall", "Jarvis calls", NotificationManager.IMPORTANCE_HIGH))
+val pi = PendingIntent.getService(this, 78, Intent(this, JarvisService::class.java).setAction("TAKE"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+val b = Notification.Builder(this, "jcall").setContentTitle(title).setContentText(text).setSmallIcon(android.R.drawable.ic_menu_call).setOnlyAlertOnce(!alert)
+if (!alert) b.addAction(Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_menu_call), "TAKE OVER", pi).build()).setOngoing(true)
+nm.notify(78, b.build())
+} catch (e: Exception) { lg("note: " + e) }
 }
 fun go(i: Intent): Boolean = try {
 if (i.dataString?.contains("youtube.com/results") == true) ytAt = System.currentTimeMillis()

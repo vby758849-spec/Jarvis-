@@ -93,6 +93,7 @@ jobs:
       <uses-permission android:name="android.permission.WAKE_LOCK" />
       <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
       <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+      <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
       <application android:label="Jarvis" android:icon="@mipmap/ic_launcher" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
        <activity android:name=".MainActivity" android:exported="true">
         <intent-filter>

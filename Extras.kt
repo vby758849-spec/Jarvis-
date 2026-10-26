@@ -120,6 +120,10 @@ override fun onNotificationPosted(sbn: StatusBarNotification) {
 val n = sbn.notification
 val pk = sbn.packageName
 if (pk == packageName) return
+if (n.category == Notification.CATEGORY_CALL && !JarvisService.callOn && getSharedPreferences("j", MODE_PRIVATE).getBoolean("autocall", false)) {
+val canAns = n.actions?.any { Regex("answer|accept|pick|उठा|जवाब|रिसीव|उत्तर").containsMatchIn(it.title?.toString()?.lowercase() ?: "") } == true
+if (canAns) { JarvisService.inst?.callIncoming(n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "Unknown"); return }
+}
 if (pk.startsWith("com.whatsapp")) JarvisService.lg("WA aaya f=" + n.flags + " cat=" + n.category)
 if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
 if ((n.flags and Notification.FLAG_ONGOING_EVENT) != 0) return

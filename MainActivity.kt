@@ -246,6 +246,22 @@ sp.edit().putString("bn", fbn.text.toString().trim()).putString("bd", fbd.text.t
 Toast.makeText(this, "Business details saved", Toast.LENGTH_SHORT).show()
 })
 
+sec("CALL ASSISTANT")
+add("call assistant auto answer phone uthana", mono("AUTO-ANSWER: Jarvis picks up calls, talks on speaker, SMSes you the conversation. Say 'Jarvis, give me the call' or tap TAKE OVER in the notification to take over. Needs: notification access, phone permission, SMS permission, speaker audible.", 10f, Color.parseColor("#8C86C9"), false))
+tgl("auto answer calls call utha automatic phone", "autocall", false, "AUTO-ANSWER CALLS")
+tgl("only unsaved numbers anjaan number", "acu", false, "ONLY UNSAVED NUMBERS")
+val dl = neon("", CY) { }
+fun shD() { dl.text = "ANSWER AFTER: " + sp.getInt("acd", 4) + " SEC" }
+shD()
+dl.setOnClickListener { val n = sp.getInt("acd", 4); sp.edit().putInt("acd", if (n >= 10) 2 else n + 2).apply(); shD() }
+add("answer delay seconds kitni der baad", dl)
+val myn = field("Your number for call updates (SMS), e.g. +91XXXXXXXXXX", sp.getString("mynum", "") ?: "", false)
+add("my number sms update mobile", myn)
+add("save call number", neon("SAVE CALL SETTINGS", CY) {
+sp.edit().putString("mynum", myn.text.toString().trim()).apply()
+Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
+})
+
 sec("WAKE & LISTEN")
 tgl("conversation continuous listening keep talking follow up hands free lagatar baat", "conv", true, "CONVERSATION MODE (keeps listening after a reply)")
 tgl("shaant mode reels movie video media apne aap bolna chup शांत", "calm", true, "QUIET MODE (stay silent during reels/movies)")
