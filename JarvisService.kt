@@ -601,18 +601,30 @@ h.postDelayed({
 if (inCallMode() || callOn) { callPend = false; return@postDelayed }
 val a = callAccept()
 lg("call: acceptRingingCall=" + a)
+if (!a) callHook()
 callWait(who, 0)
 }, sp.getInt("acd", 4) * 1000L)
 }
-private fun callAccept(): Boolean = try {
-if (checkSelfPermission(android.Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {
-(getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager).acceptRingingCall(); true
-} else false
-} catch (e: Exception) { false }
+private fun callAccept(): Boolean {
+return try {
+val g = checkSelfPermission(android.Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED
+if (!g) { lg("call: ANSWER_PHONE_CALLS permission nahi mili"); false }
+else { (getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager).acceptRingingCall(); true }
+} catch (e: Throwable) { lg("call: acceptRingingCall error: " + e); false }
+}
+private fun callHook() {
+try {
+val am = callAm()
+am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_HEADSETHOOK))
+am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_HEADSETHOOK))
+lg("call: headset key bheji")
+} catch (e: Throwable) { lg("call: headset key error: " + e) }
+}
 private fun callWait(who: String, n: Int) {
 if (inCallMode() || MsgListener.inst?.callConnected() == true) { callPend = false; lg("call: connect ho gaya"); callBegin(who); return }
 if (n > 22) { callPend = false; lg("call: connect nahi hua (mode=" + callAm().mode + ")"); return }
-if (n == 4 || n == 10 || n == 16) { val ok = MsgListener.inst?.callAct(true) == true; val t = callAccept(); lg("call: dobara koshish notif=" + ok + " tm=" + t) }
+if (n == 3 || n == 9 || n == 15) { val ok = MsgListener.inst?.callAct(true) == true; val t = callAccept(); lg("call: dobara koshish notif=" + ok + " tm=" + t) }
+if (n == 6 || n == 12) callHook()
 h.postDelayed({ callWait(who, n + 1) }, 400)
 }
 private fun callAudio(on: Boolean) {
