@@ -133,7 +133,10 @@ val pk = sbn.packageName
 if (pk == packageName) return
 if (n.category == Notification.CATEGORY_CALL && !JarvisService.callOn && getSharedPreferences("j", MODE_PRIVATE).getBoolean("autocall", false)) {
 val canAns = n.actions?.any { Regex("answer|accept|pick|उठा|जवाब|रिसीव|उत्तर").containsMatchIn(it.title?.toString()?.lowercase() ?: "") } == true
-if (canAns) { JarvisService.inst?.callIncoming(n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "Unknown"); return }
+if (canAns) {
+val ex = listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT, Notification.EXTRA_BIG_TEXT).joinToString(" ") { n.extras.getCharSequence(it)?.toString() ?: "" }
+JarvisService.inst?.callIncoming(n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "Unknown", ex); return
+}
 }
 if (pk.startsWith("com.whatsapp")) JarvisService.lg("WA aaya f=" + n.flags + " cat=" + n.category)
 if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return

@@ -593,7 +593,8 @@ private fun callBn() = sp.getString("bn", "")?.trim().orEmpty().ifEmpty { "our b
 private fun callAm() = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
 private fun inCallMode(): Boolean { val m = callAm().mode; return m == android.media.AudioManager.MODE_IN_CALL || m == android.media.AudioManager.MODE_IN_COMMUNICATION }
 
-fun callIncoming(who: String) {
+fun callIncoming(who: String, extra: String = "") {
+callExtra = extra
 if (callOn || callPend || !sp.getBoolean("autocall", false)) return
 val unsaved = who.firstOrNull()?.let { it == '+' || it.isDigit() } == true
 if (sp.getBoolean("acu", false) && !unsaved) return
@@ -608,16 +609,23 @@ if (!a) callHook()
 callWait(who, 0)
 }, sp.getInt("acd", 4) * 1000L)
 }
+private var callExtra = ""
 private val callSmsAt = HashMap<String, Long>()
 private fun callNumber(who: String): String {
 val digits = who.filter { it.isDigit() || it == '+' }
 if (who.firstOrNull()?.let { it == '+' || it.isDigit() } == true && digits.length >= 6) return digits
+val P = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+val NM = android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+val NU = android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER
+for ((sel, arg) in listOf(NM + " = ?" to who.trim(), NM + " LIKE ?" to "%" + who.trim() + "%")) {
 try {
-contentResolver.query(android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI, arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER),
-android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " = ?", arrayOf(who), null)?.use { c ->
-if (c.moveToFirst()) return c.getString(0)?.filter { it.isDigit() || it == '+' } ?: ""
+contentResolver.query(P, arrayOf(NU), sel, arrayOf(arg), null)?.use { c ->
+if (c.moveToFirst()) { val n = c.getString(0)?.filter { it.isDigit() || it == '+' } ?: ""; if (n.length >= 6) return n }
 }
 } catch (e: Throwable) { lg("contact number: " + e) }
+}
+val m = Regex("\\+?\\d[\\d\\s\\-()]{7,}\\d").find(callExtra)
+if (m != null) { val n = m.value.filter { it.isDigit() || it == '+' }; if (n.length >= 8) return n }
 return ""
 }
 private fun callDecline(who: String) {
