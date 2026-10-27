@@ -5,10 +5,9 @@ import android.graphics.*
 import android.view.View
 import kotlin.math.*
 
-/** Majin intro: background + glowing logo + MAJIN letters + loading bar. Images: hud.jpg (bg) and blueprint.jpg (logo). */
+/** Majin intro, laid out like the design: stage 941 x 1672 units, scaled to cover the screen. */
 class MajinIntro(c: Context) : View(c) {
     private var t0 = 0L
-    private val tfB = Typeface.create("sans-serif", Typeface.BOLD)
     private val tfL = Typeface.create("sans-serif-light", Typeface.NORMAL)
     private val scr = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
     private val cmx = ColorMatrix()
@@ -19,14 +18,18 @@ class MajinIntro(c: Context) : View(c) {
     private val dx = FloatArray(40) { rnd.nextFloat() }
     private val dy = FloatArray(40) { rnd.nextFloat() }
     private val ds = FloatArray(40) { 0.02f + rnd.nextFloat() * 0.05f }
-    private val letters = "MAJIN"
-    private var orb1: RadialGradient? = null
-    private var orb2: RadialGradient? = null
+    private var glow1: RadialGradient? = null
+    private var glow2: RadialGradient? = null
+    private var sph1: RadialGradient? = null
+    private var sph2: RadialGradient? = null
     private var flareG: RadialGradient? = null
     private var barG: LinearGradient? = null
     private var txtG: LinearGradient? = null
-    private var barL = 0f
-    private var barW = 0f
+    private val letters = arrayOfNulls<Path>(5)
+    private val tri = Path()
+    private var u = 1f
+    private var offX = 0f
+    private var offY = 0f
 
     private fun load(n: String): Bitmap? = try {
         val id = resources.getIdentifier(n, "drawable", context.packageName)
@@ -35,29 +38,59 @@ class MajinIntro(c: Context) : View(c) {
 
     private fun cl(x: Float) = max(0f, min(1f, x))
 
+    private fun build(ch: Char): Path {
+        val q = Path()
+        when (ch) {
+            'M' -> { q.moveTo(0f, 80f); q.lineTo(0f, 0f); q.lineTo(24f, 0f); q.lineTo(55f, 48f); q.lineTo(86f, 0f); q.lineTo(110f, 0f); q.lineTo(110f, 80f); q.lineTo(90f, 80f); q.lineTo(90f, 30f); q.lineTo(55f, 76f); q.lineTo(20f, 30f); q.lineTo(20f, 80f) }
+            'A' -> { q.moveTo(0f, 80f); q.lineTo(55f, 0f); q.lineTo(110f, 80f); q.lineTo(86f, 80f); q.lineTo(55f, 36f); q.lineTo(24f, 80f) }
+            'J' -> { q.moveTo(40f, 0f); q.lineTo(62f, 0f); q.lineTo(62f, 52f); q.quadTo(62f, 80f, 30f, 80f); q.lineTo(0f, 80f); q.lineTo(0f, 62f); q.lineTo(28f, 62f); q.quadTo(40f, 62f, 40f, 50f) }
+            'I' -> { q.moveTo(0f, 0f); q.lineTo(18f, 0f); q.lineTo(18f, 80f); q.lineTo(0f, 80f) }
+            else -> { q.moveTo(0f, 80f); q.lineTo(0f, 0f); q.lineTo(20f, 0f); q.lineTo(70f, 52f); q.lineTo(70f, 0f); q.lineTo(90f, 0f); q.lineTo(90f, 80f); q.lineTo(70f, 80f); q.lineTo(20f, 28f); q.lineTo(20f, 80f) }
+        }
+        q.close()
+        return q
+    }
+
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-        val u = min(h / 1672f, w / 941f)
-        val R = 45f * u
-        orb1 = RadialGradient(0f, 0f, R, intArrayOf(0xFFFFB060.toInt(), 0x887A4DFF.toInt(), 0x00000000), floatArrayOf(0f, 0.4f, 1f), Shader.TileMode.CLAMP)
-        orb2 = RadialGradient(0f, 0f, R, intArrayOf(0xFF9AB0FF.toInt(), 0x88B06BFF.toInt(), 0x00000000), floatArrayOf(0f, 0.4f, 1f), Shader.TileMode.CLAMP)
+        u = max(h / 1672f, w / 941f)
+        offX = (w - 941f * u) / 2f; offY = (h - 1672f * u) / 2f
+        glow1 = RadialGradient(0f, 0f, 45f * u, intArrayOf(0x66FFB060, 0x227A4DFF, 0x00000000), floatArrayOf(0f, 0.4f, 1f), Shader.TileMode.CLAMP)
+        glow2 = RadialGradient(0f, 0f, 45f * u, intArrayOf(0x669AB0FF, 0x22B06BFF, 0x00000000), floatArrayOf(0f, 0.4f, 1f), Shader.TileMode.CLAMP)
+        sph1 = RadialGradient(-6f * u, -7f * u, 26f * u, intArrayOf(0xFFFFE2C0.toInt(), 0xFFB06BFF.toInt(), 0xFF2A1670.toInt()), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+        sph2 = RadialGradient(-6f * u, -7f * u, 26f * u, intArrayOf(0xFFDCE8FF.toInt(), 0xFF6A8CFF.toInt(), 0xFF1A2478.toInt()), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
         flareG = RadialGradient(0f, 0f, 95f * u, intArrayOf(0xFFFF8A1A.toInt(), 0x00FF8A1A), floatArrayOf(0f, 1f), Shader.TileMode.CLAMP)
-        barW = 353f * u; barL = (w - barW) / 2f
-        barG = LinearGradient(barL, 0f, barL + barW, 0f, intArrayOf(0xFFFFA31F.toInt(), 0xFFFF5A5A.toInt(), 0xFF8A4DFF.toInt(), 0xFF4A62FF.toInt()), floatArrayOf(0f, 0.38f, 0.72f, 1f), Shader.TileMode.CLAMP)
-        val top = h * (965f / 1672f)
+        val bl = offX + 293f * u; val bw = 353f * u
+        barG = LinearGradient(bl, 0f, bl + bw, 0f, intArrayOf(0xFFFFA31F.toInt(), 0xFFFF5A5A.toInt(), 0xFF8A4DFF.toInt(), 0xFF4A62FF.toInt()), floatArrayOf(0f, 0.38f, 0.72f, 1f), Shader.TileMode.CLAMP)
+        val top = offY + 965f * u
         txtG = LinearGradient(0f, top, 0f, top + 80f * u, 0xFFFFFFFF.toInt(), 0xFFAAB6E6.toInt(), Shader.TileMode.CLAMP)
+        val ws = floatArrayOf(110f, 110f, 62f, 18f, 90f)
+        val gap = (545f - ws.sum()) / 4f
+        var x = 14f + (927f - 545f) / 2f + 0f
+        x = 470.5f - 545f / 2f
+        val m = Matrix()
+        for (i in 0 until 5) {
+            val pa = build("MAJIN"[i])
+            m.reset(); m.postScale(u, u); m.postTranslate(offX + x * u, top)
+            pa.transform(m)
+            letters[i] = pa
+            if (i == 1) {
+                tri.reset(); tri.moveTo(55f, 56f); tri.lineTo(68f, 78f); tri.lineTo(42f, 78f); tri.close()
+                tri.transform(m)
+            }
+            x += ws[i] + gap
+        }
     }
 
     override fun onDraw(cv: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0f) return
-        val u = min(h / 1672f, w / 941f)
         if (t0 == 0L) t0 = System.currentTimeMillis()
         val t = (System.currentTimeMillis() - t0) / 1000f
         cv.drawColor(0xFF02030A.toInt())
 
-        // background (centre-crop, slow drift)
+        // background photo
         bg?.let { b ->
-            val s = max(w / b.width, h / b.height) * (1f + 0.035f * (0.5f + 0.5f * sin(t * 0.45f)))
+            val s = u * 941f / b.width * (1f + 0.035f * (0.5f + 0.5f * sin(t * 0.45f)))
             p.reset(); p.isAntiAlias = true; p.isFilterBitmap = true
             p.alpha = (255 * cl((t - 0.1f) / 1.2f)).toInt()
             cv.save(); cv.translate(w / 2, h / 2); cv.scale(s, s)
@@ -74,11 +107,10 @@ class MajinIntro(c: Context) : View(c) {
 
         // logo
         val e = 1f - (1f - cl(t / 2.2f)).pow(3)
-        val cx = w / 2f; val cy = h * (625f / 1672f)
+        val cx = offX + 460f * u; val cy = offY + 625f * u
         lg?.let { b ->
-            val lw = 640f * u; val lh = lw * b.height / b.width
-            val flash = 0.9f * exp(-((t - 2.2f) * 3.5f).pow(2))
-            val g = 1f + 0.06f * sin(t * 2.1f) + flash
+            val lw = 640f * u; val lh = 610f * u
+            val g = 1f + 0.06f * sin(t * 2.1f) + 0.9f * exp(-((t - 2.2f) * 3.5f).pow(2))
             p.reset(); p.isAntiAlias = true; p.isFilterBitmap = true
             p.xfermode = scr
             if (g > 1.03f) { cmx.setScale(g, g, g, 1f); p.colorFilter = ColorMatrixColorFilter(cmx) }
@@ -93,64 +125,76 @@ class MajinIntro(c: Context) : View(c) {
             cv.restore()
         }
 
-        // orbs + flare
+        // glossy orbs + flare on the ring tip
         if (e > 0.6f) {
             val k = (e - 0.6f) / 0.4f
-            val orbs = arrayOf(orb1, orb2)
-            val a0 = floatArrayOf(0.96f, 3.99f)
-            p.reset(); p.isAntiAlias = true
-            p.xfermode = scr
-            for (i in 0..1) {
-                val a = a0[i] + t * 0.6f
-                p.shader = orbs[i]; p.alpha = (255 * k).toInt()
-                cv.save(); cv.translate(cx + cos(a) * 314f * u, cy + sin(a) * 314f * u * 0.95f)
-                cv.drawCircle(0f, 0f, 45f * u, p); cv.restore()
+            // 4 balls: two on the big circle, two swinging around the M on a tilted orbit (left and right side)
+            for (i in 0..3) {
+                val outer = i < 2
+                val a = if (outer) 0.96f + i * 3.0316f + t * 0.6f else i * 3.1416f - t * 0.95f
+                val rr = if (outer) 314f else 255f
+                val ry = if (outer) 1f else 0.38f
+                var px = cos(a) * rr * u
+                var py = sin(a) * rr * ry * u
+                var depth = 1f
+                if (!outer) {
+                    val tl = -0.32f
+                    val x2 = px * cos(tl) - py * sin(tl); val y2 = px * sin(tl) + py * cos(tl)
+                    px = x2; py = y2
+                    depth = 0.82f + 0.25f * sin(a)
+                }
+                val ox = cx + px; val oy = cy - (if (outer) py else -py)
+                cv.save(); cv.translate(ox, oy); cv.scale(depth, depth)
+                p.reset(); p.isAntiAlias = true; p.xfermode = scr; p.shader = if (i % 2 == 0) glow1 else glow2; p.alpha = (255 * k).toInt()
+                cv.drawCircle(0f, 0f, 45f * u, p)
+                p.reset(); p.isAntiAlias = true; p.shader = if (i % 2 == 0) sph1 else sph2; p.alpha = (255 * k).toInt()
+                cv.drawCircle(0f, 0f, (if (outer) 18f else 15f) * u, p)
+                cv.restore()
             }
-            p.shader = flareG; p.alpha = (255 * (0.28f + 0.12f * sin(t * 2.6f)) * k).toInt()
+            p.reset(); p.isAntiAlias = true; p.xfermode = scr; p.shader = flareG; p.alpha = (255 * (0.28f + 0.12f * sin(t * 2.6f)) * k).toInt()
             cv.save(); cv.translate(cx + 297f * u, cy - 50f * u); cv.drawCircle(0f, 0f, 95f * u, p); cv.restore()
         }
 
-        // MAJIN letters
-        p.reset(); p.isAntiAlias = true
-        p.typeface = tfB
-        p.textSize = 80f * u * 1.28f
-        p.shader = txtG
-        val ws = FloatArray(5) { p.measureText(letters[it].toString()) }
-        val gap = max(0f, (545f * u - ws.sum()) / 4f)
-        var x = (w - (ws.sum() + gap * 4f)) / 2f
-        val base = h * (965f / 1672f) + 80f * u
+        // MAJIN letters (same shapes as the design)
         for (i in 0 until 5) {
             val q = cl((t - (2.25f + i * 0.2f)) / 0.8f)
+            val pa = letters[i] ?: continue
             if (q > 0f) {
                 val qe = 1f - (1f - q) * (1f - q)
-                p.alpha = (255 * qe).toInt()
-                cv.drawText(letters[i].toString(), x - (1f - qe) * 18f * u, base, p)
+                p.reset(); p.isAntiAlias = true; p.shader = txtG; p.alpha = (255 * qe).toInt()
+                cv.save(); cv.translate(-(1f - qe) * 18f * u, 0f)
+                cv.drawPath(pa, p)
+                if (i == 1) { p.reset(); p.isAntiAlias = true; p.color = 0xFFFF9A1F.toInt(); p.alpha = (255 * qe).toInt(); cv.drawPath(tri, p) }
+                cv.restore()
             }
-            x += ws[i] + gap
         }
 
-        // tagline
+        // tagline: IDEAS | TOOLS | REAL IMPACT, spread across the width
         val ta = cl((t - 3.4f) / 1.4f)
         if (ta > 0f) {
             p.reset(); p.isAntiAlias = true; p.color = 0xFF8F99BA.toInt(); p.alpha = (255 * ta).toInt()
-            p.textSize = 19f * u; p.letterSpacing = 0.3f; p.textAlign = Paint.Align.CENTER
-            p.typeface = tfL
-            cv.drawText("IDEAS  |  TOOLS  |  REAL IMPACT", w / 2f, h * (1085f / 1672f) + 19f * u, p)
+            p.textSize = 19f * u; p.letterSpacing = 0.3f; p.typeface = tfL
+            val parts = arrayOf("IDEAS", "|", "TOOLS", "|", "REAL IMPACT")
+            val wd = FloatArray(5) { p.measureText(parts[it]) }
+            val gap = (551f * u - wd.sum()) / 4f
+            var x = offX + 197f * u
+            val by = offY + 1085f * u + 19f * u
+            for (i in 0 until 5) { cv.drawText(parts[i], x, by, p); x += wd[i] + gap }
         }
 
-        // loading bar
+        // loading bar + label
         val pr = cl((t - 3.2f) / 4.5f); val ep = 1f - (1f - pr).pow(2.2f)
         val ba = cl((t - 3.1f) / 0.8f)
         if (ba > 0f) {
-            val by = h * (1432f / 1672f); val bh = 15f * u
+            val bl = offX + 293f * u; val bw = 353f * u
+            val by = offY + 1432f * u; val bh = 15f * u
             p.reset(); p.isAntiAlias = true; p.color = 0xFF1A2036.toInt(); p.alpha = (255 * ba).toInt()
-            cv.drawRoundRect(RectF(barL, by, barL + barW, by + bh), bh, bh, p)
+            cv.drawRoundRect(RectF(bl, by, bl + bw, by + bh), bh, bh, p)
             p.shader = barG; p.alpha = (255 * ba).toInt()
-            cv.drawRoundRect(RectF(barL, by, barL + barW * ep, by + bh), bh, bh, p)
+            cv.drawRoundRect(RectF(bl, by, bl + bw * ep, by + bh), bh, bh, p)
             p.reset(); p.isAntiAlias = true; p.color = 0xFFA9B2CF.toInt(); p.alpha = (255 * cl((t - 3.3f) / 0.8f)).toInt()
-            p.textSize = 21f * u; p.letterSpacing = 0.14f; p.textAlign = Paint.Align.CENTER
-            p.typeface = tfL
-            cv.drawText(if (pr >= 1f) "Ready" else "Loading...", w / 2f, h * (1474f / 1672f) + 21f * u, p)
+            p.textSize = 21f * u; p.letterSpacing = 0.14f; p.textAlign = Paint.Align.CENTER; p.typeface = tfL
+            cv.drawText(if (pr >= 1f) "Ready" else "Loading...", offX + 470.5f * u, offY + 1474f * u + 21f * u, p)
         }
         postInvalidateOnAnimation()
     }

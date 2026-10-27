@@ -262,6 +262,11 @@ add("save grok", neon("SAVE GROK", CY) {
 sp.edit().putString("gk", gk.text.toString().trim()).putString("gmodel", gm.text.toString().trim()).apply()
 Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
 })
+val vp = neon("", CY) { }
+fun shVP() { vp.text = "VOICE AI: " + (if (sp.getString("vprov", "gemini") == "grok") "GROK (faster)" else "GEMINI") }
+shVP()
+vp.setOnClickListener { sp.edit().putString("vprov", if (sp.getString("vprov", "gemini") == "grok") "gemini" else "grok").apply(); shVP() }
+add("voice ai grok gemini tez fast awaaz jawab", vp)
 tgl("chat speak replies awaaz bolna", "chatspeak", true, "SPEAK CHAT REPLIES")
 
 sec("CALL ASSISTANT")

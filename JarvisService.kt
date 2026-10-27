@@ -482,10 +482,15 @@ if (!a.isNullOrEmpty()) city = listOfNotNull(a[0].subLocality, a[0].locality, a[
 " User ke phone ki abhi ki jagah: " + l.latitude + "," + l.longitude + (if (city.isNotEmpty()) " (" + city + ")" else "") + ". 'Yahan se' ka matlab yehi jagah hai."
 } catch (e: Exception) { "" }
 }
+private fun grokOn(): Boolean = sp.getString("vprov", "gemini") == "grok" && sp.getString("gk", "")?.trim().orEmpty().isNotEmpty()
+private fun grokAsk(sys: String, hist: List<Pair<String, String>>, q: String): String? =
+Grok.ask(sp.getString("gk", "")?.trim().orEmpty(), sp.getString("gmodel", "") ?: "", sys, hist, q, true)
 private fun ask(q: String) {
 val key = sp.getString("key", "")?.trim().orEmpty()
-if (key.isNotEmpty() && infoRe.containsMatchIn(q.lowercase()) && !cmdRe.containsMatchIn(q.lowercase())) { askInfo(q, key); return }
-if (key.isEmpty() && infoRe.containsMatchIn(q.lowercase()) && !cmdRe.containsMatchIn(q.lowercase())) { wikiOnly(q); return }
+val g = grokOn()
+val info = infoRe.containsMatchIn(q.lowercase()) && !cmdRe.containsMatchIn(q.lowercase())
+if ((key.isNotEmpty() || g) && info) { askInfo(q, key); return }
+if (key.isEmpty() && !g && info) { wikiOnly(q); return }
 askJson(q)
 }
 private fun wikiOnly(q: String) {
@@ -508,9 +513,9 @@ val en = isEn()
 val wk = Wiki.lookup(q, if (en) "en" else "hi") ?: (if (!en) Wiki.lookup(q, "en") else null)
 val wkTxt = if (wk != null) " Wikipedia ka lekh (" + wk.first + "): " + wk.second.take(1200) + " Agar sawal ka jawab isme hai to isi ke aadhaar par do aur jawab ki shuruaat " + (if (en) "\"According to Wikipedia,\" se karo." else "\"विकिपीडिया के मुताबिक,\" se karo.") + " Agar isme nahi hai to search se do." else ""
 val sys = "Tum Jarvis ho, " + sp.getString("owner", "")?.trim().orEmpty().ifEmpty { "Boss" } + " ke phone assistant, Google jaise sahi aur kaam ke jawab dene wale. Jawab chhota rakho (2-4 vaakya) par poori kaam ki jaankari do: doori pooche to kilometre mein sadak ki doori, gaadi se lagbhag kitna samay lagega, aur ek-do chhoti kaam ki baatein (jaise raasta ya mashhoor cheez). Taza jaankari ke liye search use karo. Markdown, bullet, emoji, star, link bilkul nahi. Number saaf bolo. " + (if (en) "Jawab English mein do." else "Jawab Devanagari Hindi mein do, English shabd English mein.") + " Abhi: " + java.util.Date() + whereAmI() + wkTxt
-val raw = Gemini.info(key, sys, hh, q)
+val raw = if (grokOn()) (grokAsk(sys, hh, q) ?: (if (key.isNotEmpty()) Gemini.info(key, sys, hh, q) else null)) else Gemini.info(key, sys, hh, q)
 h.post {
-if (raw == null) { lg("info fail: " + Gemini.lastErr); askJson(q) }
+if (raw == null) { lg("info fail: " + Gemini.lastErr + " " + Grok.lastErr); askJson(q) }
 else {
 val sy = raw.replace(Regex("[*#`_\\[\\]]"), "").replace(Regex("\\(https?://[^)]*\\)"), "").trim()
 hist.add(q to sy); if (hist.size > 6) hist.removeAt(0)
@@ -522,11 +527,11 @@ say(dv(sy))
 }
 private fun askJson(q: String) {
 val key = sp.getString("key", "")?.trim().orEmpty()
-if (key.isEmpty()) { if (!fallback(q)) say(if (isEn()) "I need a Gemini key to understand that, but I can still handle calls, messages, YouTube, alarms, weather and music." else "यह समझने के लिए Gemini key चाहिए। बिना key के मैं कॉल, मैसेज, यूट्यूब, अलार्म, मौसम और म्यूज़िक जैसे आसान काम कर सकता हूँ।"); return }
+if (key.isEmpty() && !grokOn()) { if (!fallback(q)) say(if (isEn()) "I need a Gemini key to understand that, but I can still handle calls, messages, YouTube, alarms, weather and music." else "यह समझने के लिए Gemini key चाहिए। बिना key के मैं कॉल, मैसेज, यूट्यूब, अलार्म, मौसम और म्यूज़िक जैसे आसान काम कर सकता हूँ।"); return }
 val hh = ArrayList(hist)
 Thread {
 val sys = Tr.sys(sp.getString("prof", "") ?: "", isEn(), sp.getString("owner", "")?.trim().orEmpty().ifEmpty { "Boss" })
-val raw = Gemini.call(key, sys, hh, q)
+val raw = if (grokOn()) (grokAsk(sys, hh, q) ?: (if (key.isNotEmpty()) Gemini.call(key, sys, hh, q) else null)) else Gemini.call(key, sys, hh, q)
 h.post {
 if (raw == null) { lg("Gemini fail: " + Gemini.lastErr); if (!fallback(q)) { say(if (Gemini.lastErr.contains("resolve") || Gemini.lastErr.contains("Unknown")) "इंटरनेट नहीं है, अभी सिर्फ़ टॉर्च और समय बता सकता हूँ" else "जवाब नहीं मिल पाया, थोड़ी देर बाद फिर कोशिश करो"); Toast.makeText(this, Gemini.lastErr.take(300), Toast.LENGTH_LONG).show() } }
 else {
