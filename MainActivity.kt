@@ -20,6 +20,7 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.*
 class MainActivity : Activity() {
@@ -71,8 +72,8 @@ root.addView(PremiumBg(this), FrameLayout.LayoutParams(-1, -1))
 val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(28), dp(18), dp(28)) }
 col.addView(mono("J.A.R.V.I.S", 26f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.25f })
 col.addView(mono("JUST A RATHER VERY INTELLIGENT SYSTEM", 9f, Color.parseColor("#8C86C9"), false).apply { gravity = Gravity.CENTER; letterSpacing = 0.1f })
-val robo = OrbView(this)
-col.addView(robo, LinearLayout.LayoutParams(-1, dp(170)).apply { topMargin = dp(6) })
+val robo = BotView(this)
+col.addView(robo, LinearLayout.LayoutParams(-1, dp(200)).apply { topMargin = dp(6) })
 val panel = col
 val status = mono("OFFLINE", 14f, DIM, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.3f; setPadding(0, dp(10), 0, dp(10)) }
 panel.addView(status)
@@ -86,6 +87,7 @@ val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; set
 btns.addView(neon("▶  ACTIVATE", CY) { ask() }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(6), 0) })
 btns.addView(neon("■  SHUTDOWN", RD) { stopService(Intent(this, JarvisService::class.java)) }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(6), 0, 0, 0) })
 panel.addView(btns)
+panel.addView(neon("\uD83D\uDCAC  CHAT WITH JARVIS", GR) { openChat(root) }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
 val logHead = mono("// SYSTEM LOG", 10f, Color.parseColor("#8C86C9"), false).apply { setPadding(0, dp(14), 0, dp(4)) }
 val logv = mono("", 11f, Color.parseColor("#D6DCFF"), false).apply {
 setPadding(dp(12), dp(10), dp(12), dp(10)); background = box(Color.parseColor("#2B2F66"), Color.parseColor("#0B0C22"), 12)
@@ -157,7 +159,7 @@ sp.edit().putString("owner", (ownF?.text?.toString() ?: "").trim()).putString("x
 Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
 })
 add("jaankari details privacy mitao delete profile meri जानकारी", neon("DELETE MY INFO", RD) {
-sp.edit().remove("prof").apply()
+sp.edit().remove("prof").remove("chatlog").apply()
 Toast.makeText(this, "Your saved info was deleted", Toast.LENGTH_SHORT).show()
 })
 
@@ -245,6 +247,22 @@ add("save business vyapar details सेव", neon("SAVE BUSINESS", CY) {
 sp.edit().putString("bn", fbn.text.toString().trim()).putString("bd", fbd.text.toString().trim()).putString("bp", fbp.text.toString().trim()).putString("bh", fbh.text.toString().trim()).putString("ba", fba.text.toString().trim()).putString("bc", fbc.text.toString().trim()).putString("bx", fbx.text.toString().trim()).apply()
 Toast.makeText(this, "Business details saved", Toast.LENGTH_SHORT).show()
 })
+
+sec("CHAT AI (GROK / GEMINI)")
+val pv = neon("", CY) { }
+fun shPV() { pv.text = "CHAT AI: " + (if (sp.getString("cprov", "gemini") == "grok") "GROK (xAI)" else "GEMINI") }
+shPV()
+pv.setOnClickListener { sp.edit().putString("cprov", if (sp.getString("cprov", "gemini") == "grok") "gemini" else "grok").apply(); shPV() }
+add("chat ai provider grok gemini xai chatgpt", pv)
+val gk = field("Grok API key (xAI, starts with xai-)", sp.getString("gk", "") ?: "", false)
+add("grok api key xai gork chabi", gk)
+val gm = field("Grok model (leave empty for default)", sp.getString("gmodel", "") ?: "", false)
+add("grok model name", gm)
+add("save grok", neon("SAVE GROK", CY) {
+sp.edit().putString("gk", gk.text.toString().trim()).putString("gmodel", gm.text.toString().trim()).apply()
+Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
+})
+tgl("chat speak replies awaaz bolna", "chatspeak", true, "SPEAK CHAT REPLIES")
 
 sec("CALL ASSISTANT")
 add("call assistant auto answer phone uthana", mono("AUTO-ANSWER: Jarvis picks up calls, talks on speaker, SMSes you the conversation. Say 'Jarvis, give me the call' or tap TAKE OVER in the notification to take over. Needs: notification access, phone permission, SMS permission, speaker audible.", 10f, Color.parseColor("#8C86C9"), false))
@@ -400,11 +418,111 @@ cvLab?.text = "Clone failed: " + msg
 }
 }.show()
 }
+private var chatV: View? = null
+private val chatHist = ArrayList<Pair<String, String>>()
+@Deprecated("x") override fun onBackPressed() { if (chatV != null) closeChat() else super.onBackPressed() }
+private fun closeChat() {
+val v = chatV ?: return
+chatV = null
+try { (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0) } catch (e: Exception) { }
+(v.parent as? ViewGroup)?.removeView(v)
+}
+private fun openChat(root: FrameLayout) {
+if (chatV != null) return
+val sp = getSharedPreferences("j", MODE_PRIVATE)
+window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+val ov = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#05060F")); isClickable = true }
+ov.addView(PremiumBg(this), FrameLayout.LayoutParams(-1, -1))
+val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(6), dp(26), dp(12), dp(0)) }
+val back = mono("\u2039", 30f, CY, true).apply { setPadding(dp(12), 0, dp(12), 0); setOnClickListener { closeChat() } }
+val title = mono("JARVIS CHAT", 14f, Color.WHITE, true).apply { letterSpacing = 0.2f; gravity = Gravity.CENTER }
+val prov = mono("", 10f, GR, true).apply { setPadding(dp(8), dp(6), dp(8), dp(6)) }
+fun shP() { prov.text = if (sp.getString("cprov", "gemini") == "grok") "GROK" else "GEMINI" }
+shP()
+prov.setOnClickListener { sp.edit().putString("cprov", if (sp.getString("cprov", "gemini") == "grok") "gemini" else "grok").apply(); shP() }
+val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), dp(12)) }
+val sv = ScrollView(this).apply { addView(list) }
+val clr = mono("CLEAR", 10f, DIM, true).apply { setPadding(dp(8), dp(6), dp(8), dp(6)) }
+clr.setOnClickListener { list.removeAllViews(); chatHist.clear(); sp.edit().remove("chatlog").apply() }
+bar.addView(back); bar.addView(title, LinearLayout.LayoutParams(0, -2, 1f)); bar.addView(clr); bar.addView(prov)
+col.addView(bar)
+col.addView(BotView(this), LinearLayout.LayoutParams(-1, dp(150)))
+col.addView(sv, LinearLayout.LayoutParams(-1, 0, 1f))
+
+fun bubble(text: String, mine: Boolean): TextView {
+val tv = TextView(this).apply {
+this.text = text; textSize = 14f; setTextColor(Color.WHITE); setTextIsSelectable(true)
+setPadding(dp(14), dp(10), dp(14), dp(10))
+background = box(if (mine) Color.parseColor("#4A5BFF") else Color.parseColor("#2B2F66"), if (mine) Color.parseColor("#2B3CC8") else Color.parseColor("#101230"), 16)
+maxWidth = (resources.displayMetrics.widthPixels * 0.78f).toInt()
+}
+list.addView(tv, LinearLayout.LayoutParams(-2, -2).apply { gravity = if (mine) Gravity.END else Gravity.START; topMargin = dp(8) })
+sv.post { sv.fullScroll(View.FOCUS_DOWN) }
+return tv
+}
+fun saveLog() {
+val a = org.json.JSONArray()
+for ((u, r) in chatHist.takeLast(30)) a.put(org.json.JSONArray().put(u).put(r))
+sp.edit().putString("chatlog", a.toString()).apply()
+}
+try {
+val a = org.json.JSONArray(sp.getString("chatlog", "[]"))
+chatHist.clear()
+for (i in 0 until a.length()) { val x = a.getJSONArray(i); chatHist.add(x.getString(0) to x.getString(1)); bubble(x.getString(0), true); bubble(x.getString(1), false) }
+} catch (e: Exception) { }
+if (chatHist.isEmpty()) bubble("Hello! I am Jarvis. Ask me anything.", false)
+
+val input = EditText(this).apply {
+hint = "Message Jarvis..."; setTextColor(Color.WHITE); setHintTextColor(DIM); textSize = 14f
+background = box(Color.parseColor("#2B2F66"), Color.parseColor("#0B0C22"), 22)
+setPadding(dp(16), dp(10), dp(16), dp(10)); maxLines = 4
+inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+}
+val doSend = {
+val q = input.text.toString().trim()
+if (q.isNotEmpty()) {
+input.setText("")
+bubble(q, true)
+val wait = bubble("\u2026", false)
+val hist = ArrayList(chatHist)
+val grok = sp.getString("cprov", "gemini") == "grok"
+val owner = sp.getString("owner", "")?.trim().orEmpty()
+val sys = "You are Jarvis, a smart, friendly AI assistant" + (if (owner.isNotEmpty()) " of " + owner else "") + ". Answer clearly and concisely in the same language the user writes in (English, Hindi or Hinglish). Use plain text, no markdown."
+Thread {
+val r: String = if (grok) {
+val k = sp.getString("gk", "")?.trim().orEmpty()
+if (k.isEmpty()) "Add your Grok API key in Settings > CHAT AI, or switch the top-right button to GEMINI." else (Grok.ask(k, sp.getString("gmodel", "") ?: "", sys, hist, q) ?: ("Grok error: " + Grok.lastErr))
+} else {
+val k = sp.getString("key", "")?.trim().orEmpty()
+if (k.isEmpty()) "Add your Gemini API key in Settings > ACCOUNT, or use Grok." else (Gemini.info(k, sys, hist, q) ?: "Gemini did not answer. Check your key or try again.")
+}
+runOnUiThread {
+wait.text = r
+if (!r.startsWith("Grok error") && !r.startsWith("Add your") && !r.startsWith("Gemini did")) { chatHist.add(q to r); while (chatHist.size > 30) chatHist.removeAt(0); saveLog() }
+sv.post { sv.fullScroll(View.FOCUS_DOWN) }
+if (sp.getBoolean("chatspeak", true) && chatV != null) {
+val sayT = r.replace(Regex("[*#`_>]"), "").take(500)
+if (sayT.any { it in '\u0900'..'\u097F' }) vc().speak(sayT) else vc().speakEn(sayT)
+}
+}
+}.start()
+}
+}
+val send = neon("\u27A4", CY) { doSend() }
+val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(6), dp(12), dp(14)) }
+row.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+row.addView(send, LinearLayout.LayoutParams(dp(56), -2).apply { leftMargin = dp(8) })
+col.addView(row)
+ov.addView(col, FrameLayout.LayoutParams(-1, -1))
+root.addView(ov, FrameLayout.LayoutParams(-1, -1))
+chatV = ov
+}
 private fun lock(root: FrameLayout) {
 val sp = getSharedPreferences("j", MODE_PRIVATE)
 val ov = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#05060F")); isClickable = true }
 val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(24), dp(48), dp(24), dp(24)) }
-c.addView(OrbView(this), LinearLayout.LayoutParams(-1, dp(220)))
+c.addView(BotView(this), LinearLayout.LayoutParams(-1, dp(190)))
 c.addView(mono("ACTIVATION REQUIRED", 17f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.12f; setPadding(0, dp(16), 0, dp(8)) })
 c.addView(mono("Send this Device ID to the seller to get your licence code:", 12f, Color.WHITE, false).apply { gravity = Gravity.CENTER })
 val id = License.deviceId(this)

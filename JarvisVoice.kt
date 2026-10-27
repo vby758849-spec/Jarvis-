@@ -2,6 +2,7 @@ package com.vaibhav.jarvis
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import java.util.Locale
 
@@ -48,6 +49,11 @@ class JarvisVoice(context: Context, private val onReady: () -> Unit = {}) : Text
         enVoice = pickMale("en", Regex("gbb|gbd|rjs"), null, sp.getInt("vk", 0))
         tts.setPitch(pitch())
         tts.setSpeechRate(rate())
+        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(id: String?) { JarvisService.orbSpeak = true }
+            override fun onDone(id: String?) { JarvisService.orbSpeak = false }
+            @Deprecated("x") override fun onError(id: String?) { JarvisService.orbSpeak = false }
+        })
         ready = true
         pending.forEach { speak(it) }
         pending.clear()
