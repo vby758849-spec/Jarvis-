@@ -358,7 +358,7 @@ if (sp.getString("lang", "en") == "en") vc().speakEn("Hello sir, I am Jarvis. Al
 setContentView(root)
 if (!License.valid(this)) lock(root)
 if ((sp.getString("key", "") ?: "").isEmpty()) Toast.makeText(this, "First enter your Gemini API key in Settings (it is free)", Toast.LENGTH_LONG).show()
-if (b == null) hh.postDelayed({ Updater.check(this, false) }, 4500)
+if (b == null) hh.postDelayed({ Updater.check(this, false) }, 9500)
 tick = object : Runnable {
 override fun run() {
 val en = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: ""

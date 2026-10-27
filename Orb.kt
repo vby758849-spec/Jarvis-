@@ -7,7 +7,11 @@ import kotlin.math.*
 
 /** Majin intro: background + glowing logo + MAJIN letters + loading bar. Images: hud.jpg (bg) and blueprint.jpg (logo). */
 class MajinIntro(c: Context) : View(c) {
-    private val t0 = System.currentTimeMillis()
+    private var t0 = 0L
+    private val tfB = Typeface.create("sans-serif", Typeface.BOLD)
+    private val tfL = Typeface.create("sans-serif-light", Typeface.NORMAL)
+    private val scr = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+    private val cmx = ColorMatrix()
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private var bg: Bitmap? = load("hud")
     private var lg: Bitmap? = load("blueprint")
@@ -47,6 +51,7 @@ class MajinIntro(c: Context) : View(c) {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0f) return
         val u = min(h / 1672f, w / 941f)
+        if (t0 == 0L) t0 = System.currentTimeMillis()
         val t = (System.currentTimeMillis() - t0) / 1000f
         cv.drawColor(0xFF02030A.toInt())
 
@@ -75,8 +80,8 @@ class MajinIntro(c: Context) : View(c) {
             val flash = 0.9f * exp(-((t - 2.2f) * 3.5f).pow(2))
             val g = 1f + 0.06f * sin(t * 2.1f) + flash
             p.reset(); p.isAntiAlias = true; p.isFilterBitmap = true
-            p.xfermode = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
-            p.colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(g, 0f, 0f, 0f, 0f, 0f, g, 0f, 0f, 0f, 0f, 0f, g, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
+            p.xfermode = scr
+            if (g > 1.03f) { cmx.setScale(g, g, g, 1f); p.colorFilter = ColorMatrixColorFilter(cmx) }
             p.alpha = (255 * cl(t / 0.5f)).toInt()
             val sx = max(0.06f, cos((1f - e) * 1.4f))
             val sz = 0.35f + 0.65f * e
@@ -94,7 +99,7 @@ class MajinIntro(c: Context) : View(c) {
             val orbs = arrayOf(orb1, orb2)
             val a0 = floatArrayOf(0.96f, 3.99f)
             p.reset(); p.isAntiAlias = true
-            p.xfermode = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+            p.xfermode = scr
             for (i in 0..1) {
                 val a = a0[i] + t * 0.6f
                 p.shader = orbs[i]; p.alpha = (255 * k).toInt()
@@ -107,7 +112,7 @@ class MajinIntro(c: Context) : View(c) {
 
         // MAJIN letters
         p.reset(); p.isAntiAlias = true
-        p.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        p.typeface = tfB
         p.textSize = 80f * u * 1.28f
         p.shader = txtG
         val ws = FloatArray(5) { p.measureText(letters[it].toString()) }
@@ -128,8 +133,8 @@ class MajinIntro(c: Context) : View(c) {
         val ta = cl((t - 3.4f) / 1.4f)
         if (ta > 0f) {
             p.reset(); p.isAntiAlias = true; p.color = 0xFF8F99BA.toInt(); p.alpha = (255 * ta).toInt()
-            p.textSize = 19f * u; p.letterSpacing = 0.3f - 0.25f * (1f - ta); p.textAlign = Paint.Align.CENTER
-            p.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            p.textSize = 19f * u; p.letterSpacing = 0.3f; p.textAlign = Paint.Align.CENTER
+            p.typeface = tfL
             cv.drawText("IDEAS  |  TOOLS  |  REAL IMPACT", w / 2f, h * (1085f / 1672f) + 19f * u, p)
         }
 
@@ -144,7 +149,7 @@ class MajinIntro(c: Context) : View(c) {
             cv.drawRoundRect(RectF(barL, by, barL + barW * ep, by + bh), bh, bh, p)
             p.reset(); p.isAntiAlias = true; p.color = 0xFFA9B2CF.toInt(); p.alpha = (255 * cl((t - 3.3f) / 0.8f)).toInt()
             p.textSize = 21f * u; p.letterSpacing = 0.14f; p.textAlign = Paint.Align.CENTER
-            p.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            p.typeface = tfL
             cv.drawText(if (pr >= 1f) "Ready" else "Loading...", w / 2f, h * (1474f / 1672f) + 21f * u, p)
         }
         postInvalidateOnAnimation()

@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.net.URL
 object Updater {
-    fun ver(n: Long): String = "v1." + n
+    fun ver(n: Long): String = "1." + maxOf(1L, n - 153L)
 
 private const val API = "https://api.github.com/repos/vby758849-spec/Jarvis-/releases/tags/latest"
 private const val APK = "https://github.com/vby758849-spec/Jarvis-/releases/download/latest/Jarvis.apk"
@@ -137,29 +137,45 @@ r?.substringAfter("/", "")?.trim()?.toLongOrNull() ?: -1L
 }
 private fun fetch(u: String, total: Long, f: File, prog: (Long) -> Unit) {
 RandomAccessFile(f, "rw").use { it.setLength(total) }
-val parts = 6
-val size = (total + parts - 1) / parts
+val chunk = 2L * 1024 * 1024
+val cnt = ((total + chunk - 1) / chunk).toInt()
+val next = java.util.concurrent.atomic.AtomicInteger(0)
 val done = AtomicLong(0)
 val err = AtomicReference<Exception?>(null)
-val ths = (0 until parts).map { i ->
+val ths = (0 until 8).map {
 Thread {
 try {
-val s = i * size
-val e = minOf(total - 1, s + size - 1)
-if (s <= e) {
+RandomAccessFile(f, "rw").use { raf ->
+val buf = ByteArray(131072)
+while (err.get() == null) {
+val i = next.getAndIncrement()
+if (i >= cnt) break
+val s = i * chunk
+val e = minOf(total - 1, s + chunk - 1)
+var tries = 0
+while (true) {
+var got = 0L
+try {
 val c = URL(u).openConnection() as HttpURLConnection
 c.setRequestProperty("Range", "bytes=" + s + "-" + e)
-c.connectTimeout = 15000; c.readTimeout = 30000
+c.connectTimeout = 15000; c.readTimeout = 20000
 if (c.responseCode != 206) throw Exception("range " + c.responseCode)
-RandomAccessFile(f, "rw").use { raf ->
 raf.seek(s)
 val inp = c.inputStream
-val buf = ByteArray(131072)
 while (true) {
-val n = inp.read(buf)
-if (n < 0) break
-raf.write(buf, 0, n)
-prog(done.addAndGet(n.toLong()))
+val r = inp.read(buf)
+if (r < 0) break
+raf.write(buf, 0, r)
+got += r
+prog(done.addAndGet(r.toLong()))
+}
+inp.close()
+if (got != e - s + 1) throw Exception("short chunk")
+break
+} catch (ex: Exception) {
+done.addAndGet(-got)
+if (++tries >= 3) throw ex
+}
 }
 }
 }
