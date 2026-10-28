@@ -54,6 +54,12 @@ val q = toks(s, setOf("maps", "map", "नक्शा", "रास्ता", "�
 say(q + " का रास्ता")
 go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q))))
 }
+Regex("screenshot|स्क्रीनशॉट|screen shot").containsMatchIn(s) -> screenshot()
+Regex("screen record|स्क्रीन रिकॉर्ड").containsMatchIn(s) -> qsToggle("rec", true)
+Regex("battery saver|बैटरी सेवर|power saving").containsMatchIn(s) -> qsToggle("bs", !Regex("band|off|बंद|बन्द|ऑफ|disable|stop").containsMatchIn(s))
+Regex("do not disturb|डू नॉट डिस्टर्ब|\\bdnd\\b|परेशान न करो").containsMatchIn(s) -> qsToggle("dnd", !Regex("band|off|बंद|बन्द|ऑफ|disable|stop").containsMatchIn(s))
+Regex("mobile data|मोबाइल डेटा|\\bdata\\b|डेटा").containsMatchIn(s) -> qsToggle("data", !Regex("band|off|बंद|बन्द|ऑफ|disable|stop").containsMatchIn(s))
+Regex("wi-?fi|वाई-?फाई|वाईफाई").containsMatchIn(s) -> qsToggle("wifi", !Regex("band|off|बंद|बन्द|ऑफ|disable|stop").containsMatchIn(s))
 Regex("hotspot|हॉटस्पॉट|हॉट स्पॉट").containsMatchIn(s) -> qsToggle("hs", !Regex("band|off|बंद|बन्द|ऑफ|disable").containsMatchIn(s))
 Regex("brightness|ब्राइटनेस").containsMatchIn(s) -> brightness(s)
 Regex("bluetooth|ब्लूटूथ").containsMatchIn(s) && !Regex("jod|connect|pair|जोड़|कनेक्ट").containsMatchIn(s) -> qsToggle("bt", !Regex("band|off|बंद|बन्द|ऑफ|disable").containsMatchIn(s))

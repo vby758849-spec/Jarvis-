@@ -35,7 +35,7 @@ fun JarvisService.brightness(q: String) {
     }
 }
 
-/** Bluetooth ("bt") or hotspot ("hs") on/off by tapping the quick-settings tile, without opening the Settings app. */
+/** Quick-settings tile on/off without opening Settings. kind: bt, hs, wifi, data, bs (battery saver), dnd, rec (screen recorder) */
 fun JarvisService.qsToggle(kind: String, on: Boolean) {
     val acc = SendAcc.inst
     if (acc == null) {
@@ -45,19 +45,31 @@ fun JarvisService.qsToggle(kind: String, on: Boolean) {
     }
     JarvisService.qsKind = kind; JarvisService.qsWant = on; JarvisService.qsTries = 0
     JarvisService.qsAt = System.currentTimeMillis()
-    val nm = if (kind == "bt") (if (isEn()) "Bluetooth" else "ब्लूटूथ") else (if (isEn()) "hotspot" else "हॉटस्पॉट")
-    say(if (isEn()) "Turning " + nm + (if (on) " on" else " off") else nm + (if (on) " चालू कर रहा हूँ" else " बंद कर रहा हूँ"))
+    val nm = when (kind) {
+        "bt" -> "Bluetooth"; "hs" -> "hotspot"; "wifi" -> "Wi-Fi"; "data" -> "mobile data"
+        "bs" -> "battery saver"; "dnd" -> "do not disturb"; else -> "screen recorder"
+    }
+    say(if (isEn()) "Okay, " + nm + (if (kind == "rec") "" else if (on) " on" else " off")
+        else nm + (if (kind == "rec") " शुरू कर रहा हूँ" else if (on) " चालू कर रहा हूँ" else " बंद कर रहा हूँ"))
     acc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
     Handler(Looper.getMainLooper()).postDelayed({
         if (JarvisService.qsAt != 0L) {
             JarvisService.qsAt = 0L
             acc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
             JarvisService.lg("qs: tile nahi mila (" + kind + ")")
-            if (kind == "bt") bluetooth(on)
-            else {
-                say(if (isEn()) "I could not find the hotspot tile. Opening hotspot settings." else "हॉटस्पॉट का बटन नहीं मिला, सेटिंग खोल रहा हूँ")
-                go(Intent("android.settings.TETHER_SETTINGS"))
+            when (kind) {
+                "bt" -> bluetooth(on)
+                "hs" -> { say(if (isEn()) "I could not find that tile. Opening settings." else "बटन नहीं मिला, सेटिंग खोल रहा हूँ"); go(Intent("android.settings.TETHER_SETTINGS")) }
+                else -> say(if (isEn()) "That button is not in your quick settings panel. Add it there first." else "वो बटन तुम्हारे क्विक सेटिंग पैनल में नहीं है, पहले उसे जोड़ो")
             }
         }
     }, 7000)
+}
+
+/** Screenshot via accessibility */
+fun JarvisService.screenshot() {
+    val acc = SendAcc.inst
+    if (acc == null) { say(if (isEn()) "Please turn on Accessibility for Jarvis." else "Jarvis की Accessibility चालू करो"); return }
+    if (android.os.Build.VERSION.SDK_INT < 28) { say(if (isEn()) "Screenshot needs Android 9 or newer" else "स्क्रीनशॉट के लिए Android 9 चाहिए"); return }
+    Handler(Looper.getMainLooper()).postDelayed({ acc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) }, 700)
 }

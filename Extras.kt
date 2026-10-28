@@ -295,8 +295,17 @@ for (i in 0 until n.childCount) { if (scrollQs(n.getChild(i), d + 1)) return tru
 return false
 }
 private fun qsClick(root: AccessibilityNodeInfo) {
-val bt = JarvisService.qsKind == "bt"
-val re = if (bt) Regex("bluetooth|ब्लूटूथ", RegexOption.IGNORE_CASE) else Regex("hotspot|tethering|हॉटस्पॉट|हॉट स्पॉट", RegexOption.IGNORE_CASE)
+val kd = JarvisService.qsKind
+val bt = kd == "bt"
+val re = Regex(when (kd) {
+"bt" -> "bluetooth|ब्लूटूथ"
+"hs" -> "hotspot|tethering|हॉटस्पॉट|हॉट स्पॉट"
+"wifi" -> "wi-?fi|internet|वाई-?फाई|इंटरनेट"
+"data" -> "mobile data|cellular|data|मोबाइल डेटा|डेटा"
+"bs" -> "battery saver|power saving|बैटरी सेवर|बैटरी बचत"
+"dnd" -> "do not disturb|dnd|silent mode|परेशान न करें|डू नॉट डिस्टर्ब"
+else -> "screen record|recorder|स्क्रीन रिकॉर्ड"
+}, RegexOption.IGNORE_CASE)
 val tile = findTile(root, re, 0)
 if (tile == null) { if (JarvisService.qsTries++ in 2..4) scrollQs(root, 0); return }
 var d = (tile.contentDescription?.toString() ?: "") + " " + (tile.text?.toString() ?: "")
@@ -308,7 +317,7 @@ else -> tile.isChecked || tile.isSelected
 }
 JarvisService.qsAt = 0L
 val want = JarvisService.qsWant
-if (isOn != want) { up(tile)?.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.lg("qs: " + (if (bt) "Bluetooth" else "Hotspot") + " tile dabaya") }
+if (kd == "rec" || isOn != want) { up(tile)?.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.lg("qs: " + kd + " tile dabaya") }
 else JarvisService.lg("qs: pehle se " + (if (want) "on" else "off"))
 Handler(Looper.getMainLooper()).postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 700)
 }
