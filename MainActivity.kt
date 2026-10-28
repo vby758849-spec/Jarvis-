@@ -41,6 +41,7 @@ private var cvLab: TextView? = null
 private val hh = Handler(Looper.getMainLooper())
 private var tick: Runnable? = null
 private var uiRun: Runnable? = null
+private var closeDrawerFn: (() -> Boolean)? = null
 private fun vc(): JarvisVoice { val v = voice ?: JarvisVoice(this); voice = v; return v }
 private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 private fun box(stroke: Int, fill: Int, r: Int) = GradientDrawable().apply {
@@ -412,13 +413,36 @@ if (ok && !hdr) n++
 none.visibility = if (s.isNotEmpty() && n == 0) View.VISIBLE else View.GONE
 }
 applyVis()
-panel.addView(head)
-panel.addView(q, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
-panel.addView(none)
-panel.addView(st)
+st.visibility = View.VISIBLE
 val sc = ScrollView(this).apply { addView(col) }
 root.addView(sc, FrameLayout.LayoutParams(-1, -1))
-goSet = { st.visibility = View.VISIBLE; sc.post { sc.smoothScrollTo(0, head.top) } }
+val dw = (resources.displayMetrics.widthPixels * 0.88f).toInt()
+val drawer = FrameLayout(this).apply { visibility = View.GONE }
+val scrim = View(this).apply { setBackgroundColor(0xAA000000.toInt()); alpha = 0f }
+drawer.addView(scrim, FrameLayout.LayoutParams(-1, -1))
+val dcol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.parseColor("#0A0C26")); setPadding(dp(14), dp(34), dp(14), dp(10)); isClickable = true; translationX = -dw.toFloat() }
+val dhead = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+dhead.addView(mono("\u2699  SETTINGS", 14f, CY, true).apply { letterSpacing = 0.15f }, LinearLayout.LayoutParams(0, -2, 1f))
+fun closeDr(): Boolean {
+if (drawer.visibility != View.VISIBLE) return false
+scrim.animate().alpha(0f).setDuration(180).start()
+dcol.animate().translationX(-dw.toFloat()).setDuration(220).withEndAction { drawer.visibility = View.GONE }.start()
+return true
+}
+dhead.addView(mono("\u2715", 20f, Color.WHITE, false).apply { setPadding(dp(10), dp(2), dp(4), dp(2)); setOnClickListener { closeDr() } })
+dcol.addView(dhead)
+dcol.addView(q, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+dcol.addView(none)
+dcol.addView(ScrollView(this).apply { addView(st) }, LinearLayout.LayoutParams(-1, 0, 1f))
+scrim.setOnClickListener { closeDr() }
+drawer.addView(dcol, FrameLayout.LayoutParams(dw, -1, Gravity.START))
+root.addView(drawer, FrameLayout.LayoutParams(-1, -1))
+closeDrawerFn = { closeDr() }
+goSet = {
+drawer.visibility = View.VISIBLE
+scrim.animate().alpha(1f).setDuration(200).start()
+dcol.animate().translationX(0f).setDuration(240).start()
+}
 
 if (b == null) {
 val splash = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02030A")); isClickable = true; alpha = 0f }
@@ -501,7 +525,7 @@ cvLab?.text = "Clone failed: " + msg
 }
 private var chatV: View? = null
 private val chatHist = ArrayList<Pair<String, String>>()
-@Deprecated("x") override fun onBackPressed() { if (chatV != null) closeChat() else super.onBackPressed() }
+@Deprecated("x") override fun onBackPressed() { if (chatV != null) closeChat() else if (closeDrawerFn?.invoke() == true) { } else super.onBackPressed() }
 private fun closeChat() {
 val v = chatV ?: return
 chatV = null
