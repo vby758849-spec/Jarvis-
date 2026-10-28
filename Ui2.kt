@@ -125,13 +125,16 @@ object FloatOrb {
         l.gravity = Gravity.TOP or Gravity.START
         val sp = c.getSharedPreferences("j", Context.MODE_PRIVATE)
         l.x = sp.getInt("orbx", dp(c, 8)); l.y = sp.getInt("orby", dp(c, 200))
+val dm = c.resources.displayMetrics
+fun clampPos() { l.x = l.x.coerceIn(0, max(0, dm.widthPixels - dp(c, 72))); l.y = l.y.coerceIn(dp(c, 40), max(dp(c, 40), dm.heightPixels - dp(c, 160))) }
+clampPos()
         var dx = 0f; var dy = 0f; var sx = 0; var sy = 0; var moved = false
         box.setOnTouchListener { _, e ->
             when (e.action) {
                 MotionEvent.ACTION_DOWN -> { dx = e.rawX; dy = e.rawY; sx = l.x; sy = l.y; moved = false }
                 MotionEvent.ACTION_MOVE -> {
                     if (abs(e.rawX - dx) > 12 || abs(e.rawY - dy) > 12) moved = true
-                    if (moved) { l.x = sx + (e.rawX - dx).toInt(); l.y = sy + (e.rawY - dy).toInt(); try { w.updateViewLayout(box, l) } catch (x: Exception) { } }
+                    if (moved) { l.x = sx + (e.rawX - dx).toInt(); l.y = sy + (e.rawY - dy).toInt(); clampPos(); try { w.updateViewLayout(box, l) } catch (x: Exception) { } }
                 }
                 MotionEvent.ACTION_UP -> {
                     if (moved) sp.edit().putInt("orbx", l.x).putInt("orby", l.y).apply()

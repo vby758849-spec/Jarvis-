@@ -141,6 +141,7 @@ val on = JarvisService.inst != null
 val s = JarvisService.orbState()
 val now = System.currentTimeMillis()
 micB.on = on; robo.on = on
+if (sp.getBoolean("float", false) && Settings.canDrawOverlays(this@MainActivity)) FloatOrb.update(applicationContext, true)
 if (s != 0) lastLive = now
 status.text = if (!on) "Offline \u2022 tap the mic" else when (s) { 1 -> "Listening\u2026"; 2 -> "Thinking\u2026"; 3 -> "Speaking\u2026"; else -> "Voice Assistant" }
 val live = on && (s != 0 || (now - lastLive < 6000 && JarvisService.lastA.isNotEmpty()))
