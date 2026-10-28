@@ -127,6 +127,7 @@ private val lastAt = HashMap<String, Long>()
 private val cnt = HashMap<String, Int>()
 private var cntStart = 0L
 private val muted = HashMap<String, Long>()
+private val abuseN = HashMap<String, Int>()
 override fun onNotificationPosted(sbn: StatusBarNotification) {
 val n = sbn.notification
 val pk = sbn.packageName
@@ -199,7 +200,13 @@ val raw = Gemini.call(k, sysP, hist, "Bhejne wala: " + who + ". Message: " + tex
 if (raw == null) { JarvisService.lg("auto-reply: Gemini fail"); return@Thread }
 val jo = try { JSONObject(raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()) } catch (e: Exception) { null }
 val r = jo?.optString("reply") ?: ""
-if (jo?.optBoolean("abuse") == true) { muted[id] = now + 600000; if (!biz) JarvisService.inst?.alert(who) }
+if (jo?.optBoolean("abuse") == true) {
+val c2 = (abuseN[id] ?: 0) + 1
+abuseN[id] = c2
+val pause = c2 >= 2
+if (pause) { muted[id] = now + 600000; abuseN[id] = 0 }
+if (!biz) JarvisService.inst?.alert(who, pause)
+}
 if (r.isBlank() || r.contains("SKIP", true)) { JarvisService.lg("auto-reply skip: " + who); return@Thread }
 if (send(sbn, (if (biz) "(" + bn + " Assistant) " else "(Jarvis, " + own + " ka assistant) ") + r)) {
 val l = chat.getOrPut(id) { ArrayList() }
@@ -223,10 +230,16 @@ return false
 }
 class SendAcc : AccessibilityService() {
 private var lastLog = 0L
-override fun onServiceConnected() { JarvisService.lg("Accessibility chalu") }
+companion object { @Volatile var inst: SendAcc? = null }
+override fun onServiceConnected() { inst = this; JarvisService.lg("Accessibility chalu") }
+override fun onDestroy() { inst = null; super.onDestroy() }
 override fun onAccessibilityEvent(e: AccessibilityEvent?) {
 val root = rootInActiveWindow ?: return
 val now = System.currentTimeMillis()
+if (JarvisService.qsAt != 0L) {
+if (now - JarvisService.qsAt > 7000) JarvisService.qsAt = 0L
+else if ((e?.packageName?.toString() ?: "").contains("systemui")) { if (now - lastQs > 500) { lastQs = now; qsClick(root) }; return }
+}
 if (JarvisService.callOn && JarvisService.spkWant) {
 val pk0 = e?.packageName?.toString() ?: ""
 if (pk0.contains("dialer") || pk0.contains("incallui")) { if (now - lastSpk > 1200) { lastSpk = now; speakerClick(root) }; return }
@@ -267,6 +280,38 @@ JarvisService.lg("Band: Force stop dabaya")
 }
 private var lastBt = 0L
 private var lastSpk = 0L
+private var lastQs = 0L
+private fun findTile(n: AccessibilityNodeInfo?, re: Regex, d: Int): AccessibilityNodeInfo? {
+if (n == null || d > 22) return null
+val s = (n.contentDescription?.toString() ?: "") + " " + (n.text?.toString() ?: "")
+if (s.isNotBlank() && re.containsMatchIn(s) && up(n) != null) return n
+for (i in 0 until n.childCount) { val r = findTile(n.getChild(i), re, d + 1); if (r != null) return r }
+return null
+}
+private fun scrollQs(n: AccessibilityNodeInfo?, d: Int): Boolean {
+if (n == null || d > 22) return false
+if (n.isScrollable && n.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) return true
+for (i in 0 until n.childCount) { if (scrollQs(n.getChild(i), d + 1)) return true }
+return false
+}
+private fun qsClick(root: AccessibilityNodeInfo) {
+val bt = JarvisService.qsKind == "bt"
+val re = if (bt) Regex("bluetooth|ब्लूटूथ", RegexOption.IGNORE_CASE) else Regex("hotspot|tethering|हॉटस्पॉट|हॉट स्पॉट", RegexOption.IGNORE_CASE)
+val tile = findTile(root, re, 0)
+if (tile == null) { if (JarvisService.qsTries++ in 2..4) scrollQs(root, 0); return }
+var d = (tile.contentDescription?.toString() ?: "") + " " + (tile.text?.toString() ?: "")
+if (android.os.Build.VERSION.SDK_INT >= 30) d += " " + (tile.stateDescription?.toString() ?: "")
+val isOn = when {
+Regex("\\b(off|disabled)\\b|बंद|बन्द", RegexOption.IGNORE_CASE).containsMatchIn(d) -> false
+Regex("\\b(on|enabled)\\b|चालू", RegexOption.IGNORE_CASE).containsMatchIn(d) -> true
+else -> tile.isChecked || tile.isSelected
+}
+JarvisService.qsAt = 0L
+val want = JarvisService.qsWant
+if (isOn != want) { up(tile)?.performAction(AccessibilityNodeInfo.ACTION_CLICK); JarvisService.lg("qs: " + (if (bt) "Bluetooth" else "Hotspot") + " tile dabaya") }
+else JarvisService.lg("qs: pehle se " + (if (want) "on" else "off"))
+Handler(Looper.getMainLooper()).postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 700)
+}
 private fun speakerClick(root: AccessibilityNodeInfo) {
 val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
 if (am.isSpeakerphoneOn || JarvisService.spkTries >= 3) { JarvisService.spkWant = false; return }

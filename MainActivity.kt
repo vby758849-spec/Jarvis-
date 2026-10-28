@@ -269,6 +269,12 @@ vp.setOnClickListener { sp.edit().putString("vprov", if (sp.getString("vprov", "
 add("voice ai grok gemini tez fast awaaz jawab", vp)
 tgl("chat speak replies awaaz bolna", "chatspeak", true, "SPEAK CHAT REPLIES")
 
+sec("PHONE CONTROLS")
+add("phone controls hotspot bluetooth brightness voice", mono("Say: hotspot on/off, bluetooth on/off, brightness kam/zyada/50. Needs Accessibility ON (for hotspot and bluetooth) and the brightness permission below.", 10f, Color.parseColor("#8C86C9"), false))
+add("brightness permission allow write settings roshni", neon("ALLOW BRIGHTNESS CONTROL", CY) {
+try { startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:" + packageName))) } catch (e: Exception) { }
+})
+
 sec("CALL ASSISTANT")
 add("call assistant auto answer phone uthana", mono("AUTO-ANSWER: Jarvis picks up calls, talks on speaker, SMSes you the conversation. Say 'Jarvis, give me the call' or tap TAKE OVER in the notification to take over. Needs: notification access, phone permission, SMS permission, speaker audible.", 10f, Color.parseColor("#8C86C9"), false))
 tgl("auto answer calls call utha automatic phone", "autocall", false, "AUTO-ANSWER CALLS")

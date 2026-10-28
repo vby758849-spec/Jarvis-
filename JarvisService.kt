@@ -45,6 +45,10 @@ companion object {
 @Volatile var ytAt = 0L
 @Volatile var orbSpeak = false
 @Volatile var callOn = false
+@Volatile var qsKind = "bt"
+@Volatile var qsWant = true
+@Volatile var qsAt = 0L
+@Volatile var qsTries = 0
 @Volatile var spkWant = false
 @Volatile var spkTries = 0
 @Volatile var orbLevel = 0f
@@ -433,8 +437,8 @@ else -> { say("इंस्टाग्राम खोल रहा हूँ")
 }
 if (!ok) say("इंस्टाग्राम नहीं मिला")
 }
-fun alert(who: String) {
-h.post { say(if (isEn()) "Boss, " + who + " insulted you. I have replied and paused for ten minutes." else "बॉस, " + who + " ने आपकी बेइज़्ज़ती की। मैंने जवाब दे दिया और दस मिनट के लिए रोक दिया।") }
+fun alert(who: String, paused: Boolean = false) {
+h.post { say(if (isEn()) "Boss, " + who + " was rude to you. I replied politely" + (if (paused) " and paused for ten minutes." else ".") else "बॉस, " + who + " ने बदतमीज़ी की। मैंने शालीनता से जवाब दे दिया" + (if (paused) " और दस मिनट के लिए रोक दिया।" else "।")) }
 }
 private fun callCtl(accept: Boolean) {
 if (MsgListener.inst?.callAct(accept) == true) { say(if (accept) "कॉल उठा लिया" else "कॉल काट दिया"); return }
@@ -574,7 +578,9 @@ catch (e: Exception) { go(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 "openapp" -> openApp("open " + j.optString("app").lowercase())
 "weather" -> weather(j.optString("query"))
 "media" -> media(j.optString("query").lowercase())
-"bluetooth" -> bluetooth(j.optBoolean("on", true))
+"bluetooth" -> qsToggle("bt", j.optBoolean("on", true))
+"hotspot" -> qsToggle("hs", j.optBoolean("on", true))
+"brightness" -> brightness(j.optString("query").lowercase())
 "btpair" -> btPair(j.optString("name"))
 "wacall" -> waCall(j.optString("name"), j.optString("query").contains("video", true))
 "volume" -> volume(j.optString("query").lowercase())

@@ -54,6 +54,9 @@ val q = toks(s, setOf("maps", "map", "नक्शा", "रास्ता", "�
 say(q + " का रास्ता")
 go(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q))))
 }
+Regex("hotspot|हॉटस्पॉट|हॉट स्पॉट").containsMatchIn(s) -> qsToggle("hs", !Regex("band|off|बंद|बन्द|ऑफ|disable").containsMatchIn(s))
+Regex("brightness|ब्राइटनेस").containsMatchIn(s) -> brightness(s)
+Regex("bluetooth|ब्लूटूथ").containsMatchIn(s) && !Regex("jod|connect|pair|जोड़|कनेक्ट").containsMatchIn(s) -> qsToggle("bt", !Regex("band|off|बंद|बन्द|ऑफ|disable").containsMatchIn(s))
 s.contains("alarm") -> alarm(s)
 s.contains("weather") -> {
 val g = Regex("(.+?)\\s+(का|की|ka|ki|में|me|mein|in)\\s+weather").find(s)?.groupValues?.get(1) ?: ""
