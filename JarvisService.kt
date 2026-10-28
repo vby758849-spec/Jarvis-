@@ -33,6 +33,7 @@ private var hiV: android.speech.tts.Voice? = null
 private var enV: android.speech.tts.Voice? = null
 private val h = Handler(Looper.getMainLooper())
 private var awake = false
+    set(v) { field = v; awakeS = v }
 private var tk = 0
 private fun stayAwake(ms: Long) { awake = true; val t = ++tk; h.postDelayed({ if (t == tk) awake = false }, ms) }
 private var lastMsg = ""
@@ -44,6 +45,11 @@ companion object {
 @Volatile var igAt = 0L
 @Volatile var ytAt = 0L
 @Volatile var orbSpeak = false
+@Volatile var awakeS = false
+@Volatile var thinkAt = 0L
+@Volatile var lastQ = ""
+@Volatile var lastA = ""
+fun orbState(): Int { val n = System.currentTimeMillis(); return if (orbSpeak) 3 else if (thinkAt != 0L && n - thinkAt < 20000) 2 else if (awakeS) 1 else 0 }
 @Volatile var callOn = false
 @Volatile var qsKind = "bt"
 @Volatile var qsWant = true
@@ -110,6 +116,7 @@ super.onCreate()
 inst = this
 if (!sp.getBoolean("pt2", false)) sp.edit().putFloat("pt", 0.85f).putFloat("rt", 1.0f).putBoolean("pt2", true).apply()
 sp.registerOnSharedPreferenceChangeListener(prefL)
+h.post(floatLoop)
 if (!sp.getBoolean("hi42", false)) sp.edit().putString("lang", "en").putInt("vk", 0).putBoolean("hi42", true).apply()
 lg("Jarvis v53")
 sp.getString("key", "")?.trim()?.takeIf { it.isNotEmpty() }?.let { k -> Thread { Gemini.warm(k) }.start() }
@@ -139,16 +146,22 @@ initWake()
 override fun onDestroy() {
 inst = null
 h.removeCallbacksAndMessages(null)
+FloatOrb.hide()
 try { sp.unregisterOnSharedPreferenceChangeListener(prefL) } catch (e: Exception) { }
 sr.destroy(); tts?.shutdown()
 try { vSvc?.shutdown(); vModel?.close() } catch (e: Exception) { }
 super.onDestroy()
+}
+fun wakeNow() { h.post { say(if (isEn()) "Yes boss?" else "जी बॉस?"); h.postDelayed({ stayAwake(10000) }, 1500) } }
+private val floatLoop = object : Runnable {
+override fun run() { FloatOrb.update(this@JarvisService, sp.getBoolean("float", false)); h.postDelayed(this, 400) }
 }
 fun isEn() = sp.getString("lang", "en") == "en"
 private fun curPt() = sp.getFloat("pt", 0.85f)
 private fun curRt() = sp.getFloat("rt", 1.0f)
 fun say(t0: String) {
 if (!ttsReady) return
+lastA = t0.take(400); thinkAt = 0L
 val t = if (isEn()) Tr.en(t0) else Pron.fix(t0)
 try {
 val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
@@ -490,6 +503,7 @@ private fun grokOn(): Boolean = sp.getString("vprov", "gemini") == "grok" && sp.
 private fun grokAsk(sys: String, hist: List<Pair<String, String>>, q: String): String? =
 Grok.ask(sp.getString("gk", "")?.trim().orEmpty(), sp.getString("gmodel", "") ?: "", sys, hist, q, true)
 private fun ask(q: String) {
+lastQ = q.take(200); thinkAt = System.currentTimeMillis()
 val key = sp.getString("key", "")?.trim().orEmpty()
 val g = grokOn()
 val info = infoRe.containsMatchIn(q.lowercase()) && !cmdRe.containsMatchIn(q.lowercase())

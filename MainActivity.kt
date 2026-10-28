@@ -40,6 +40,7 @@ private var ownF: EditText? = null
 private var cvLab: TextView? = null
 private val hh = Handler(Looper.getMainLooper())
 private var tick: Runnable? = null
+private var uiRun: Runnable? = null
 private fun vc(): JarvisVoice { val v = voice ?: JarvisVoice(this); voice = v; return v }
 private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 private fun box(stroke: Int, fill: Int, r: Int) = GradientDrawable().apply {
@@ -70,24 +71,89 @@ val sp = getSharedPreferences("j", MODE_PRIVATE)
 val root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#05060F")) }
 root.addView(PremiumBg(this), FrameLayout.LayoutParams(-1, -1))
 val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(28), dp(18), dp(28)) }
-col.addView(mono("J.A.R.V.I.S", 26f, CY, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.25f })
-col.addView(mono("JUST A RATHER VERY INTELLIGENT SYSTEM", 9f, Color.parseColor("#8C86C9"), false).apply { gravity = Gravity.CENTER; letterSpacing = 0.1f })
+var goSet: () -> Unit = {}
+val topBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+topBar.addView(mono("\u2630", 22f, Color.WHITE, false).apply { setPadding(dp(4), dp(4), dp(14), dp(4)); setOnClickListener { goSet() } })
+topBar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+topBar.addView(mono("\u2699", 24f, Color.WHITE, false).apply { setPadding(dp(14), dp(4), dp(4), dp(4)); setOnClickListener { goSet() } })
+col.addView(topBar)
+col.addView(mono("Jarvis AI", 26f, Color.WHITE, true).apply {
+gravity = Gravity.CENTER
+text = android.text.SpannableString("Jarvis AI").apply { setSpan(android.text.style.ForegroundColorSpan(0xFF4F8CFF.toInt()), 7, 9, 0) }
+})
+val status = mono("Voice Assistant", 14f, CY, false).apply { gravity = Gravity.CENTER; setPadding(0, dp(2), 0, 0) }
+col.addView(status)
 val robo = BotView(this)
-col.addView(robo, LinearLayout.LayoutParams(-1, dp(200)).apply { topMargin = dp(6) })
+col.addView(robo, LinearLayout.LayoutParams(-1, dp(240)).apply { topMargin = dp(4) })
 val panel = col
-val status = mono("OFFLINE", 14f, DIM, true).apply { gravity = Gravity.CENTER; letterSpacing = 0.3f; setPadding(0, dp(10), 0, dp(10)) }
-panel.addView(status)
+val hr = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+val gw = if (hr < 12) "Good Morning," else if (hr < 17) "Good Afternoon," else "Good Evening,"
+val ownerN = (sp.getString("owner", "") ?: "").trim()
+val idleBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+idleBox.addView(mono(gw, 16f, Color.parseColor("#D6DCFF"), false).apply { gravity = Gravity.CENTER })
+idleBox.addView(mono(if (ownerN.isEmpty()) "Hello \uD83D\uDC4B" else ownerN + " \uD83D\uDC4B", 24f, Color.WHITE, true).apply { gravity = Gravity.CENTER })
+idleBox.addView(mono("How can I help you today?", 12f, Color.parseColor("#8C86C9"), false).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
+val liveBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE }
+val liveCard = mono("", 13f, Color.WHITE, false).apply { setPadding(dp(16), dp(12), dp(16), dp(12)); background = box(Color.parseColor("#2B3A8F"), Color.parseColor("#0B1038"), 18) }
+val wave = WaveView(this)
+liveBox.addView(liveCard, LinearLayout.LayoutParams(-1, -2))
+liveBox.addView(wave, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(10) })
+val mid = FrameLayout(this)
+mid.addView(idleBox, FrameLayout.LayoutParams(-1, -2))
+mid.addView(liveBox, FrameLayout.LayoutParams(-1, -2))
+col.addView(mid, LinearLayout.LayoutParams(-1, dp(190)).apply { topMargin = dp(4) })
+val quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+fun qchip(t: String, pre: String, send: Boolean) {
+quick.addView(mono(t, 10f, Color.parseColor("#D6DCFF"), false).apply {
+gravity = Gravity.CENTER; setPadding(dp(8), dp(10), dp(8), dp(10)); background = box(Color.parseColor("#2B3A8F"), Color.parseColor("#0B1038"), 14)
+setOnClickListener { openChat(root, pre, send) }
+}, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(4), 0, dp(4), 0) })
+}
+qchip("Summarize\nthis text", "Summarize this text: ", false)
+qchip("Tell me a\njoke", "Tell me a joke", true)
+qchip("What\u2019s the\nweather?", "What\u2019s the weather today?", true)
+col.addView(quick, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+val micB = MicBtn(this)
+fun roundBtn(sym: String, f: () -> Unit) = mono(sym, 20f, Color.WHITE, false).apply {
+gravity = Gravity.CENTER; background = box(Color.parseColor("#2B3A8F"), Color.parseColor("#0B1038"), 30); setOnClickListener { f() }
+}
+val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+bar.addView(roundBtn("\u2328") { openChat(root) }, LinearLayout.LayoutParams(dp(52), dp(52)))
+bar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+bar.addView(micB, LinearLayout.LayoutParams(dp(104), dp(104)))
+bar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+bar.addView(roundBtn("\uD83D\uDCF7") { try { startActivity(Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)) } catch (e: Exception) { Toast.makeText(this, "No camera app found", Toast.LENGTH_SHORT).show() } }, LinearLayout.LayoutParams(dp(52), dp(52)))
+micB.setOnClickListener { val s = JarvisService.inst; if (s == null) ask() else s.wakeNow() }
+micB.setOnLongClickListener { stopService(Intent(this, JarvisService::class.java)); Toast.makeText(this, "Jarvis stopped", Toast.LENGTH_SHORT).show(); true }
+col.addView(bar, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+col.addView(mono("Tap mic to start or talk  \u2022  hold to shut down", 9f, Color.parseColor("#8C86C9"), false).apply { gravity = Gravity.CENTER; setPadding(0, dp(2), 0, dp(10)) })
 val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
 val cN = mono("NOTIF", 11f, Color.WHITE, true).apply { setPadding(dp(10), dp(6), dp(10), dp(6)) }
 val cA = mono("ACCESS", 11f, Color.WHITE, true).apply { setPadding(dp(10), dp(6), dp(10), dp(6)) }
 val cR = mono("AUTO-REPLY", 11f, Color.WHITE, true).apply { setPadding(dp(10), dp(6), dp(10), dp(6)) }
 for (c in listOf(cN, cA, cR)) chips.addView(c, LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(4), 0, dp(4), 0) })
 panel.addView(chips)
-val btns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(16), 0, dp(8)) }
-btns.addView(neon("▶  ACTIVATE", CY) { ask() }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(6), 0) })
-btns.addView(neon("■  SHUTDOWN", RD) { stopService(Intent(this, JarvisService::class.java)) }, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(6), 0, 0, 0) })
-panel.addView(btns)
-panel.addView(neon("\uD83D\uDCAC  CHAT WITH JARVIS", GR) { openChat(root) }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
+var lastLive = 0L
+val uiTick = object : Runnable {
+override fun run() {
+val on = JarvisService.inst != null
+val s = JarvisService.orbState()
+val now = System.currentTimeMillis()
+micB.on = on; robo.on = on
+if (s != 0) lastLive = now
+status.text = if (!on) "Offline \u2022 tap the mic" else when (s) { 1 -> "Listening\u2026"; 2 -> "Thinking\u2026"; 3 -> "Speaking\u2026"; else -> "Voice Assistant" }
+val live = on && (s != 0 || (now - lastLive < 6000 && JarvisService.lastA.isNotEmpty()))
+idleBox.visibility = if (live) View.GONE else View.VISIBLE
+liveBox.visibility = if (live) View.VISIBLE else View.GONE
+if (live) {
+val t = when (s) { 1 -> "I\u2019m listening\u2026"; 2 -> "You: " + JarvisService.lastQ; else -> "Here\u2019s what I found for you:\n\n" + JarvisService.lastA }
+if (liveCard.text.toString() != t) liveCard.text = t
+wave.visibility = if (s != 0) View.VISIBLE else View.INVISIBLE
+}
+hh.postDelayed(this, 250)
+}
+}
+uiRun = uiTick
 val logHead = mono("// SYSTEM LOG", 10f, Color.parseColor("#8C86C9"), false).apply { setPadding(0, dp(14), 0, dp(4)) }
 val logv = mono("", 11f, Color.parseColor("#D6DCFF"), false).apply {
 setPadding(dp(12), dp(10), dp(12), dp(10)); background = box(Color.parseColor("#2B2F66"), Color.parseColor("#0B0C22"), 12)
@@ -311,6 +377,9 @@ add("update naya version check download install अपडेट", neon("CHECK FO
 add("version build update", mono("Current version: " + Updater.ver(Updater.cur(this)), 11f, Color.parseColor("#D6DCFF"), false))
 
 sec("DISPLAY")
+tgl("floating orb bubble always on top tairta uper", "float", false, "FLOATING ORB (ALWAYS ON TOP)", false) {
+if (sp.getBoolean("float", false) && !Settings.canDrawOverlays(this)) startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + packageName)))
+}
 tgl("system log dikhao chhupao लॉग", "showlog", false, "SHOW SYSTEM LOG") {
 val on = sp.getBoolean("showlog", false)
 logHead.visibility = if (on) View.VISIBLE else View.GONE
@@ -347,7 +416,9 @@ panel.addView(head)
 panel.addView(q, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
 panel.addView(none)
 panel.addView(st)
-root.addView(ScrollView(this).apply { addView(col) }, FrameLayout.LayoutParams(-1, -1))
+val sc = ScrollView(this).apply { addView(col) }
+root.addView(sc, FrameLayout.LayoutParams(-1, -1))
+goSet = { st.visibility = View.VISIBLE; sc.post { sc.smoothScrollTo(0, head.top) } }
 
 if (b == null) {
 val splash = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#02030A")); isClickable = true; alpha = 0f }
@@ -380,9 +451,6 @@ c.text = (if (ok) "● " else "○ ") + label; c.setTextColor(k); c.background =
 }
 chip(cN, "NOTIF", en.contains(packageName)); chip(cA, "ACCESS", ac.contains(packageName)); chip(cR, "AUTO-REPLY", sp.getBoolean("ar", false))
 val on = JarvisService.inst != null
-robo.on = on
-status.text = if (on) "ONLINE" else "OFFLINE"
-status.setTextColor(if (on) CY else DIM)
 if (logv.visibility == View.VISIBLE) logv.text = JarvisService.logs.joinToString("\n") { "› " + it }.ifEmpty { "› standby" }
 hh.postDelayed(this, 1000)
 }
@@ -391,10 +459,12 @@ hh.postDelayed(this, 1000)
 override fun onResume() {
 super.onResume()
 tick?.let { hh.post(it) }
+uiRun?.let { hh.post(it) }
 }
 override fun onPause() {
 super.onPause()
 tick?.let { hh.removeCallbacks(it) }
+uiRun?.let { hh.removeCallbacks(it) }
 }
 override fun onDestroy() {
 tick?.let { hh.removeCallbacks(it) }
@@ -438,7 +508,7 @@ chatV = null
 try { (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0) } catch (e: Exception) { }
 (v.parent as? ViewGroup)?.removeView(v)
 }
-private fun openChat(root: FrameLayout) {
+private fun openChat(root: FrameLayout, pre: String? = null, send: Boolean = false) {
 if (chatV != null) return
 val sp = getSharedPreferences("j", MODE_PRIVATE)
 window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
@@ -528,6 +598,7 @@ col.addView(row)
 ov.addView(col, FrameLayout.LayoutParams(-1, -1))
 root.addView(ov, FrameLayout.LayoutParams(-1, -1))
 chatV = ov
+if (pre != null) { input.setText(pre); input.setSelection(pre.length); if (send) doSend() }
 }
 private fun lock(root: FrameLayout) {
 val sp = getSharedPreferences("j", MODE_PRIVATE)
