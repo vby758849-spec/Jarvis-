@@ -508,7 +508,7 @@ chatV = null
 try { (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0) } catch (e: Exception) { }
 (v.parent as? ViewGroup)?.removeView(v)
 }
-private fun openChat(root: FrameLayout, pre: String? = null, send: Boolean = false) {
+private fun openChat(root: FrameLayout, pre: String? = null, autoSend: Boolean = false) {
 if (chatV != null) return
 val sp = getSharedPreferences("j", MODE_PRIVATE)
 window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
@@ -598,7 +598,7 @@ col.addView(row)
 ov.addView(col, FrameLayout.LayoutParams(-1, -1))
 root.addView(ov, FrameLayout.LayoutParams(-1, -1))
 chatV = ov
-if (pre != null) { input.setText(pre); input.setSelection(pre.length); if (send) doSend() }
+if (pre != null) { input.setText(pre); input.setSelection(pre.length); if (autoSend) doSend() }
 }
 private fun lock(root: FrameLayout) {
 val sp = getSharedPreferences("j", MODE_PRIVATE)
