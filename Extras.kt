@@ -20,20 +20,26 @@ for ((u, a) in hist) { c.put(m("user", u)); c.put(m("model", a)) }
 c.put(m("user", q))
 val body = JSONObject().put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", sys))))
 .put("contents", c)
-.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
-.put("generationConfig", JSONObject().put("maxOutputTokens", 900).put("temperature", 0.4)).toString()
-for (md in listOf("gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite")) {
+.put("generationConfig", JSONObject().put("maxOutputTokens", 900).put("temperature", 0.4))
+lastErr = ""
+val mds = listOf("gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash") + list(key)
+for (useSearch in listOf(true, false)) for (md in mds.distinct()) {
+val bodyS = JSONObject(body.toString()).apply { if (useSearch) put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject()))) }.toString()
 try {
 val con = URL("https://generativelanguage.googleapis.com/v1beta/models/$md:generateContent").openConnection() as HttpURLConnection
 con.requestMethod = "POST"; con.connectTimeout = 8000; con.readTimeout = 25000; con.doOutput = true
 con.setRequestProperty("Content-Type", "application/json"); con.setRequestProperty("x-goog-api-key", key)
-con.outputStream.use { it.write(body.toByteArray()) }
+con.outputStream.use { it.write(bodyS.toByteArray()) }
 if (con.responseCode == 200) {
 val ps = JSONObject(con.inputStream.bufferedReader().readText()).getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts")
 val sb = StringBuilder()
 for (i in 0 until ps.length()) sb.append(ps.getJSONObject(i).optString("text"))
 if (sb.isNotBlank()) return sb.toString().trim()
-} else lastErr = md + " " + con.responseCode
+} else {
+val eb = try { con.errorStream?.bufferedReader()?.readText()?.replace(Regex("\\s+"), " ")?.take(140) ?: "" } catch (x: Exception) { "" }
+lastErr = md + " " + con.responseCode + " " + eb
+if (con.responseCode == 401 || con.responseCode == 403) return null
+}
 } catch (e: Exception) { lastErr = md + " " + e }
 }
 return null
@@ -294,6 +300,12 @@ if (n.isScrollable && n.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWAR
 for (i in 0 until n.childCount) { if (scrollQs(n.getChild(i), d + 1)) return true }
 return false
 }
+private fun dumpTxt(n: AccessibilityNodeInfo?, sb: StringBuilder, d: Int) {
+if (n == null || d > 22 || sb.length > 150) return
+val s = (n.text?.toString() ?: n.contentDescription?.toString() ?: "").replace("\n", " ").take(18)
+if (s.isNotBlank()) sb.append(s).append("|")
+for (i in 0 until n.childCount) dumpTxt(n.getChild(i), sb, d + 1)
+}
 private fun qsClick(root: AccessibilityNodeInfo) {
 val kd = JarvisService.qsKind
 val bt = kd == "bt"
@@ -307,7 +319,9 @@ val re = Regex(when (kd) {
 else -> "screen record|recorder|स्क्रीन रिकॉर्ड"
 }, RegexOption.IGNORE_CASE)
 val tile = findTile(root, re, 0)
-if (tile == null) { if (JarvisService.qsTries++ in 2..4) scrollQs(root, 0); return }
+if (tile == null) {
+if (JarvisService.qsTries == 0) { val sb = StringBuilder(); dumpTxt(root, sb, 0); JarvisService.lg("qs: " + kd + " tile nahi dikha. Screen: " + sb.toString().take(150)) }
+if (JarvisService.qsTries++ in 2..4) scrollQs(root, 0); return }
 var d = (tile.contentDescription?.toString() ?: "") + " " + (tile.text?.toString() ?: "")
 if (android.os.Build.VERSION.SDK_INT >= 30) d += " " + (tile.stateDescription?.toString() ?: "")
 val isOn = when {

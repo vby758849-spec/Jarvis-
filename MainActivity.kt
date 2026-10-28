@@ -600,7 +600,7 @@ val k = sp.getString("gk", "")?.trim().orEmpty()
 if (k.isEmpty()) "Add your Grok API key in Settings > CHAT AI, or switch the top-right button to GEMINI." else (Grok.ask(k, sp.getString("gmodel", "") ?: "", sys, hist, q) ?: ("Grok error: " + Grok.lastErr))
 } else {
 val k = sp.getString("key", "")?.trim().orEmpty()
-if (k.isEmpty()) "Add your Gemini API key in Settings > ACCOUNT, or use Grok." else (Gemini.info(k, sys, hist, q) ?: "Gemini did not answer. Check your key or try again.")
+if (k.isEmpty()) "Add your Gemini API key in Settings > ACCOUNT, or use Grok." else (Gemini.info(k, sys, hist, q) ?: ("Gemini did not answer (" + Gemini.lastErr.take(160) + "). Check your key in Settings > ACCOUNT, or switch to GROK."))
 }
 runOnUiThread {
 wait.text = r
