@@ -1,0 +1,256 @@
+package com.vaibhav.jarvis
+
+import android.content.Context
+import android.content.Intent
+import android.graphics.*
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import kotlin.math.*
+
+/** Voice waveform bars. Moves with the microphone while listening and with a synthetic wave while thinking / speaking. */
+class WaveView(c: Context) : View(c) {
+    private val t0 = System.currentTimeMillis()
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val r = RectF()
+    private var g: LinearGradient? = null
+    private var lv = 0f
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        g = LinearGradient(0f, 0f, w.toFloat(), 0f, intArrayOf(0xFF2FD0FF.toInt(), 0xFF4F7CFF.toInt(), 0xFFB05BFF.toInt(), 0xFF4F7CFF.toInt(), 0xFF2FD0FF.toInt()), null, Shader.TileMode.CLAMP)
+    }
+    override fun onDraw(cv: Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        if (w <= 0f) return
+        val now = System.currentTimeMillis()
+        val t = (now - t0) / 1000f
+        val st = JarvisService.orbState()
+        val mic = if (now - JarvisService.orbLevelAt < 400) JarvisService.orbLevel else 0f
+        val target = when (st) { 1 -> 0.12f + mic * 0.88f; 3 -> 0.35f + 0.65f * abs(sin(t * 9f) * sin(t * 5.3f + 1f)); 2 -> 0.28f; else -> 0.06f }
+        lv += (target - lv) * 0.2f
+        val n = 41
+        val gap = w / n
+        p.reset(); p.isAntiAlias = true; p.shader = g
+        for (i in 0 until n) {
+            val x = (i + 0.5f) * gap
+            val d = (i - n / 2f) / (n / 2f)
+            val env = (1f - d * d).coerceIn(0.08f, 1f)
+            val ph = if (st == 2) sin(t * 3f - i * 0.35f) * 0.5f + 0.5f else abs(sin(t * 7f + i * 0.9f) * sin(t * 3.1f + i * 0.37f))
+            val bh = (h * 0.12f + h * 0.88f * env * lv * (0.35f + 0.65f * ph)).coerceAtMost(h)
+            r.set(x - gap * 0.22f, h / 2f - bh / 2f, x + gap * 0.22f, h / 2f + bh / 2f)
+            cv.drawRoundRect(r, gap, gap, p)
+        }
+        postInvalidateOnAnimation()
+    }
+}
+
+/** Round microphone button. Pulses while listening. */
+class MicBtn(c: Context) : View(c) {
+    private val t0 = System.currentTimeMillis()
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val r = RectF()
+    private var ring: SweepGradient? = null
+    @Volatile var on = false
+    init { setLayerType(LAYER_TYPE_SOFTWARE, null) }
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        ring = SweepGradient(w / 2f, h / 2f, intArrayOf(0xFF3D7BFF.toInt(), 0xFFB05BFF.toInt(), 0xFF2FA8FF.toInt(), 0xFF3D7BFF.toInt()), null)
+    }
+    override fun onDraw(cv: Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        if (w <= 0f) return
+        val s = min(w, h); val cx = w / 2f; val cy = h / 2f
+        val t = (System.currentTimeMillis() - t0) / 1000f
+        val st = if (on) JarvisService.orbState() else 0
+        val R = s * 0.36f
+        val pulse = if (st == 1) 1f + 0.06f * sin(t * 6f) else 1f
+        p.reset(); p.isAntiAlias = true; p.color = 0x223D7BFF
+        cv.drawCircle(cx, cy, R * 1.28f * pulse, p)
+        p.reset(); p.isAntiAlias = true; p.color = 0xFF080B26.toInt()
+        cv.drawCircle(cx, cy, R, p)
+        val m = Matrix(); m.setRotate(t * 40f, cx, cy); ring?.setLocalMatrix(m)
+        p.reset(); p.isAntiAlias = true; p.style = Paint.Style.STROKE; p.strokeWidth = s * 0.035f; p.shader = ring
+        p.setShadowLayer(s * 0.05f, 0f, 0f, 0xFF5B7CFF.toInt())
+        cv.drawCircle(cx, cy, R, p)
+        p.clearShadowLayer()
+        val col = if (on) 0xFFFFFFFF.toInt() else 0xFF8A8FB5.toInt()
+        p.reset(); p.isAntiAlias = true; p.color = col
+        r.set(cx - s * 0.06f, cy - s * 0.17f, cx + s * 0.06f, cy + s * 0.05f)
+        cv.drawRoundRect(r, s * 0.06f, s * 0.06f, p)
+        p.style = Paint.Style.STROKE; p.strokeWidth = s * 0.028f; p.strokeCap = Paint.Cap.ROUND
+        r.set(cx - s * 0.115f, cy - s * 0.11f, cx + s * 0.115f, cy + s * 0.11f)
+        cv.drawArc(r, 20f, 140f, false, p)
+        cv.drawLine(cx, cy + s * 0.11f, cx, cy + s * 0.17f, p)
+        cv.drawLine(cx - s * 0.05f, cy + s * 0.17f, cx + s * 0.05f, cy + s * 0.17f, p)
+        postInvalidateOnAnimation()
+    }
+}
+
+/** Always-on-top floating orb with a small peek card showing what Jarvis heard and answered. */
+object FloatOrb {
+    private var root: LinearLayout? = null
+    private var card: TextView? = null
+    private var cardBox: View? = null
+    private var hidden = ""
+    private var wm: WindowManager? = null
+    private var lp: WindowManager.LayoutParams? = null
+    private var lastActive = 0L
+    private var lastTap = 0L
+    private var tapRun: Runnable? = null
+    private val tapH = Handler(Looper.getMainLooper())
+
+    private fun dp(c: Context, v: Int) = (v * c.resources.displayMetrics.density).toInt()
+
+    fun update(c: Context, want: Boolean) {
+        try {
+            if (want && Settings.canDrawOverlays(c)) { if (root == null) show(c); refresh() } else hide()
+        } catch (e: Exception) { JarvisService.lg("orb: " + e) }
+    }
+
+    private fun show(c: Context) {
+        val w = c.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        wm = w
+        val box = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val bot = BotView(c)
+        box.addView(bot, LinearLayout.LayoutParams(dp(c, 64), dp(c, 64)))
+        val tv = TextView(c).apply { setTextColor(Color.WHITE); textSize = 12f; maxLines = 4; setPadding(0, dp(c, 4), 0, 0) }
+        val cb = LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL; visibility = View.GONE
+            setPadding(dp(c, 12), dp(c, 8), dp(c, 10), dp(c, 8))
+            background = GradientDrawable().apply { setColor(0xEE0B1038.toInt()); setStroke(dp(c, 1), 0xFF3D4BA0.toInt()); cornerRadius = dp(c, 16).toFloat() }
+        }
+        val hd = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        hd.addView(TextView(c).apply { text = "Jarvis AI"; setTextColor(0xFFA9B8FF.toInt()); textSize = 11f; typeface = Typeface.DEFAULT_BOLD }, LinearLayout.LayoutParams(0, -2, 1f))
+        val dismiss = View.OnClickListener { hidden = tv.text.toString() }
+        hd.addView(TextView(c).apply { text = "\u2014"; setTextColor(Color.WHITE); textSize = 14f; setPadding(dp(c, 10), 0, dp(c, 6), 0); setOnClickListener(dismiss) })
+        hd.addView(TextView(c).apply { text = "\u2715"; setTextColor(Color.WHITE); textSize = 13f; setPadding(dp(c, 6), 0, dp(c, 2), 0); setOnClickListener(dismiss) })
+        cb.addView(hd); cb.addView(tv)
+        val sp0 = c.getSharedPreferences("j", Context.MODE_PRIVATE)
+        val menu = LinearLayout(c).apply {
+            orientation = LinearLayout.HORIZONTAL; visibility = View.GONE; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(c, 6), dp(c, 4), dp(c, 6), dp(c, 4))
+            background = GradientDrawable().apply { setColor(0xEE0B1038.toInt()); setStroke(dp(c, 1), 0xFF3D4BA0.toInt()); cornerRadius = dp(c, 18).toFloat() }
+        }
+        fun mbtn(t: String, f: (TextView) -> Unit): TextView = TextView(c).apply {
+            text = t; setTextColor(Color.WHITE); textSize = 11f; typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(c, 10), dp(c, 8), dp(c, 10), dp(c, 8)); setOnClickListener { f(this) }
+        }
+        fun silLabel() = if (sp0.getBoolean("calm", true)) "\uD83D\uDD15 SILENT ON" else "\uD83D\uDD14 SILENT OFF"
+        menu.addView(mbtn(silLabel()) { b -> sp0.edit().putBoolean("calm", !sp0.getBoolean("calm", true)).apply(); b.text = silLabel() })
+        menu.addView(mbtn("\u23EF MEDIA") {
+            try {
+                val am = c.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+            } catch (x: Exception) { }
+        })
+        menu.addView(mbtn("OPEN") { try { c.startActivity(Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) } catch (x: Exception) { } })
+        val side = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+        side.addView(menu, LinearLayout.LayoutParams(-2, -2))
+        side.addView(cb, LinearLayout.LayoutParams(dp(c, 200), -2).apply { topMargin = dp(c, 4) })
+        box.addView(side, LinearLayout.LayoutParams(-2, -2))
+        val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+        val l = WindowManager.LayoutParams(-2, -2, type, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT)
+        l.gravity = Gravity.TOP or Gravity.START
+        val sp = c.getSharedPreferences("j", Context.MODE_PRIVATE)
+        l.x = sp.getInt("orbx", dp(c, 8)); l.y = sp.getInt("orby", dp(c, 200))
+val dm = c.resources.displayMetrics
+fun clampPos() { l.x = l.x.coerceIn(0, max(0, dm.widthPixels - dp(c, 72))); l.y = l.y.coerceIn(dp(c, 40), max(dp(c, 40), dm.heightPixels - dp(c, 160))) }
+clampPos()
+        var dx = 0f; var dy = 0f; var sx = 0; var sy = 0; var moved = false
+        box.setOnTouchListener { _, e ->
+            when (e.action) {
+                MotionEvent.ACTION_DOWN -> { dx = e.rawX; dy = e.rawY; sx = l.x; sy = l.y; moved = false }
+                MotionEvent.ACTION_MOVE -> {
+                    if (abs(e.rawX - dx) > 12 || abs(e.rawY - dy) > 12) moved = true
+                    if (moved) { l.x = sx + (e.rawX - dx).toInt(); l.y = sy + (e.rawY - dy).toInt(); clampPos(); try { w.updateViewLayout(box, l) } catch (x: Exception) { } }
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (moved) sp.edit().putInt("orbx", l.x).putInt("orby", l.y).apply()
+                    else {
+                        val now = System.currentTimeMillis()
+                        if (now - lastTap < 380) {
+                            lastTap = 0L; tapRun?.let { tapH.removeCallbacks(it) }
+                            sp.edit().putBoolean("float", false).apply()
+                            hide()
+                            try { android.widget.Toast.makeText(c, "Orb closed. Turn it on again in Settings.", android.widget.Toast.LENGTH_LONG).show() } catch (x: Exception) { }
+                        } else {
+                            lastTap = now
+                            val r = Runnable {
+                                lastTap = 0L
+                                if (menu.visibility == View.VISIBLE) menu.visibility = View.GONE
+                                else { menu.visibility = View.VISIBLE; tapH.postDelayed({ menu.visibility = View.GONE }, 6000) }
+                            }
+                            tapRun = r; tapH.postDelayed(r, 390)
+                        }
+                    }
+                }
+            }
+            true
+        }
+        w.addView(box, l)
+        root = box; card = tv; cardBox = cb; lp = l
+    }
+
+    private fun refresh() {
+        val tv = card ?: return
+        val cb = cardBox ?: return
+        val st = JarvisService.orbState()
+        val now = System.currentTimeMillis()
+        if (st != 0) lastActive = now
+        val txt = when (st) {
+            1 -> "Listening\u2026"
+            2 -> JarvisService.lastQ.ifEmpty { "Thinking\u2026" }
+            else -> JarvisService.lastA
+        }
+        if (txt != hidden) hidden = ""
+        val showIt = (st != 0 || now - lastActive < 4000) && txt.isNotEmpty() && txt != hidden
+        cb.visibility = if (showIt) View.VISIBLE else View.GONE
+        if (showIt && tv.text.toString() != txt) tv.text = txt
+    }
+
+    fun hide() {
+        try { root?.let { wm?.removeView(it) } } catch (e: Exception) { }
+        root = null; card = null; cardBox = null
+    }
+}
+
+/** Full-screen Jarvis cover shown above the system panel while Jarvis flips a quick setting, so nothing flashes on screen. */
+object Curtain {
+    private var v: FrameLayout? = null
+    private var wm: WindowManager? = null
+    fun show(c: android.accessibilityservice.AccessibilityService, text: String) {
+        try {
+            hide()
+            val w = c.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val d = c.resources.displayMetrics.density
+            val f = FrameLayout(c).apply { setBackgroundColor(0xF2070A22.toInt()); alpha = 0f }
+            val col = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+            col.addView(BotView(c), LinearLayout.LayoutParams((150 * d).toInt(), (150 * d).toInt()))
+            col.addView(TextView(c).apply {
+                this.text = text; setTextColor(0xFFD6DCFF.toInt()); textSize = 15f; gravity = Gravity.CENTER
+                typeface = Typeface.MONOSPACE; letterSpacing = 0.08f; setPadding((24 * d).toInt(), (10 * d).toInt(), (24 * d).toInt(), 0)
+            })
+            f.addView(col, FrameLayout.LayoutParams(-1, -1))
+            val lp = WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT)
+            w.addView(f, lp)
+            f.animate().alpha(1f).setDuration(120).start()
+            v = f; wm = w
+            JarvisService.lg("curtain: dikha diya")
+        } catch (e: Exception) { JarvisService.lg("curtain: FAIL " + e) }
+    }
+    fun hideSoon() { Handler(Looper.getMainLooper()).postDelayed({ hide() }, 450) }
+    fun hide() {
+        try { v?.let { wm?.removeView(it) } } catch (e: Exception) { }
+        v = null
+    }
+}
