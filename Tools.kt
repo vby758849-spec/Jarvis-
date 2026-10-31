@@ -161,15 +161,40 @@ say("$name को मैसेज भेज दिया")
 }
 }
 fun JarvisService.alarm(s: String, label: String = "") {
+val rel = Regex("(\\d{1,3})\\s*(minute|minutes|mins|min|मिनट|ghante|ghanta|ghantey|hours|hour|hrs|hr|घंटे|घंटा)").find(s)
+var hr: Int
+var mn: Int
+if (rel != null && Regex("baad|बाद|later|after|\\bin\\b|mein|में").containsMatchIn(s)) {
+val n = rel.groupValues[1].toInt()
+val u = rel.groupValues[2]
+val isH = u.startsWith("h") || u.startsWith("gh") || u.startsWith("घ")
+val c = java.util.Calendar.getInstance().apply { add(if (isH) java.util.Calendar.HOUR_OF_DAY else java.util.Calendar.MINUTE, n) }
+hr = c.get(java.util.Calendar.HOUR_OF_DAY); mn = c.get(java.util.Calendar.MINUTE)
+} else {
 val m = Regex("(\\d{1,2})(?:[: ](\\d{2}))?\\s*(am|pm|baje)?").find(s)
-if (m == null) { say("कितने बजे का अलार्म?"); return }
-var hr = m.groupValues[1].toInt(); val mn = m.groupValues[2].toIntOrNull() ?: 0
+if (m == null) { say(if (isEn()) "For what time?" else "कितने बजे का अलार्म?"); return }
+hr = m.groupValues[1].toInt(); mn = m.groupValues[2].toIntOrNull() ?: 0
 val ap = m.groupValues[3]
-if (ap == "pm" && hr < 12) hr += 12
-if (ap == "am" && hr == 12) hr = 0
-say("अलार्म लगा दिया")
+val pm = ap == "pm" || Regex("शाम|sham|evening|रात|raat|night|दोपहर|dopahar|afternoon").containsMatchIn(s)
+val am = ap == "am" || Regex("सुबह|subah|morning|सवेरे|savere").containsMatchIn(s)
+if (hr > 23 || mn > 59) { say(if (isEn()) "For what time?" else "कितने बजे का अलार्म?"); return }
+if (pm && hr < 12) hr += 12
+if (am && hr == 12) hr = 0
+}
+val hh = if (hr % 12 == 0) 12 else hr % 12
+say((if (isEn()) "Alarm set for " + hh + ":" + String.format("%02d", mn) + (if (hr >= 12) " PM" else " AM") else "अलार्म " + hh + ":" + String.format("%02d", mn) + (if (hr >= 12) " शाम/दोपहर" else " सुबह") + " का लगा दिया"))
 go(Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hr)
 .putExtra(AlarmClock.EXTRA_MINUTES, mn).putExtra(AlarmClock.EXTRA_SKIP_UI, true).putExtra(AlarmClock.EXTRA_MESSAGE, label))
+}
+/** Countdown timer: "10 minute ka timer" */
+fun JarvisService.timer(s: String) {
+val m = Regex("(\\d{1,3})\\s*(minute|minutes|mins|min|मिनट|second|seconds|sec|सेकंड|ghante|ghanta|hours|hour|hr|घंटे|घंटा)").find(s)
+if (m == null) { say(if (isEn()) "For how long?" else "कितनी देर का टाइमर?"); return }
+val n = m.groupValues[1].toInt()
+val u = m.groupValues[2]
+val secs = if (u.startsWith("s") || u.startsWith("से")) n else if (u.startsWith("h") || u.startsWith("gh") || u.startsWith("घ")) n * 3600 else n * 60
+say(if (isEn()) "Timer set for " + n + " " + u else n.toString() + " " + u + " का टाइमर लगा दिया")
+go(Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, secs).putExtra(AlarmClock.EXTRA_SKIP_UI, true))
 }
 fun JarvisService.youtube(s: String) {
 val q = s.replace(Regex("\\b(youtube|play|chalao|chala|kholo|khol|open|par|pe|on|karo|do|gaana|song)\\b"), "").trim()
