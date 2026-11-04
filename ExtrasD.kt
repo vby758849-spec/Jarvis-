@@ -14,8 +14,17 @@ import java.net.URL
 object Gemini {
 fun warm(key: String) { Thread { list(key) }.start() }
 @Volatile var lastErr = ""
-private val FAST = listOf("gemini-2.5-flash-lite", "gemini-2.5-flash")
-private val PLAIN = listOf("gemini-flash-lite-latest", "gemini-flash-latest")
+// Last-resort names, used only if Google's model list can't be fetched. Normally models are discovered live via list().
+private val FALLBACK = listOf("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-flash-lite-latest")
+private fun ver(n: String): Double = Regex("gemini-(\\d+(?:\\.\\d+)?)").find(n)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+/** First race: the 3 newest models Google currently offers. */
+private fun fast(key: String): List<String> = (list(key) + FALLBACK).distinct().take(3)
+/** Second race (if the first fails): the next models in line. */
+private fun plain(key: String): List<String> {
+val all = (list(key) + FALLBACK).distinct()
+val f = fast(key)
+return all.filter { it !in f }.take(2).ifEmpty { all.take(2) }
+}
 
 /** One request. Returns the text, or null (error text is added to errs). */
 private fun post(key: String, md: String, body: String, errs: java.util.concurrent.ConcurrentLinkedQueue<String>): String? {
@@ -47,6 +56,7 @@ got++
 if (r.isNotEmpty()) return r
 }
 lastErr = errs.joinToString(" | ")
+modelsAt = 0L // everything failed: re-fetch Google's model list next time, in case a model was retired
 return null
 }
 
@@ -54,7 +64,8 @@ private fun build(sys: String, hist: List<Pair<String, String>>, q: String, toke
 val c = JSONArray()
 for ((u, a) in hist) { c.put(m("user", u)); c.put(m("model", a)) }
 c.put(m("user", q))
-val gc = JSONObject().put("maxOutputTokens", tokens).put("temperature", temp)
+// Newer models "think" by default and thinking tokens count toward the limit, so give non-fast requests extra room.
+val gc = JSONObject().put("maxOutputTokens", tokens + (if (fast) 0 else 1500)).put("temperature", temp)
 if (json) gc.put("responseMimeType", "application/json")
 if (fast) gc.put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
 val b = JSONObject().put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", sys))))
@@ -65,20 +76,21 @@ return b.toString()
 
 fun info(key: String, sys: String, hist: List<Pair<String, String>>, q: String): String? {
 lastErr = ""
-race(key, FAST, build(sys, hist, q, 600, 0.4, false, true, true))?.let { return it }
+race(key, fast(key), build(sys, hist, q, 600, 0.4, false, true, true))?.let { return it }
 val e1 = lastErr
-race(key, PLAIN, build(sys, hist, q, 600, 0.4, false, false, false))?.let { return it }
+race(key, plain(key), build(sys, hist, q, 600, 0.4, false, false, false))?.let { return it }
 lastErr = e1 + " || " + lastErr
 return null
 }
-private var models: List<String>? = null
+@Volatile private var models: List<String>? = null
+@Volatile private var modelsAt = 0L
 private fun m(r: String, t: String) = JSONObject().put("role", r).put("parts", JSONArray().put(JSONObject().put("text", t)))
 private fun list(key: String): List<String> {
-models?.let { return it }
+models?.let { if (System.currentTimeMillis() - modelsAt < 3600000L) return it }
 val out = ArrayList<String>()
 try {
-val c = URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100").openConnection() as HttpURLConnection
-c.setRequestProperty("x-goog-api-key", key); c.connectTimeout = 15000; c.readTimeout = 15000
+val c = URL("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200").openConnection() as HttpURLConnection
+c.setRequestProperty("x-goog-api-key", key); c.connectTimeout = 4000; c.readTimeout = 6000
 if (c.responseCode == 200) {
 val arr = JSONObject(c.inputStream.bufferedReader().readText()).getJSONArray("models")
 for (i in 0 until arr.length()) {
@@ -89,15 +101,16 @@ if (ok && n.contains("flash") && !Regex("image|tts|live|audio|thinking|exp|previ
 }
 }
 } catch (e: Exception) { }
-val r = out.sortedWith(compareByDescending<String> { it.contains("lite") }.thenByDescending { it })
-if (r.isNotEmpty()) models = r
-return r
+// Newest version first; at the same version, the lite (faster) one first.
+val r = out.sortedWith(compareByDescending<String> { ver(it) }.thenByDescending { it.contains("lite") })
+if (r.isNotEmpty()) { models = r; modelsAt = System.currentTimeMillis(); return r }
+return models ?: r
 }
 fun call(key: String, sys: String, hist: List<Pair<String, String>>, q: String): String? {
 lastErr = ""
-race(key, FAST, build(sys, hist, q, 500, 0.6, true, false, true))?.let { return it }
+race(key, fast(key), build(sys, hist, q, 500, 0.6, true, false, true))?.let { return it }
 val e1 = lastErr
-race(key, PLAIN, build(sys, hist, q, 500, 0.6, true, false, false))?.let { return it }
+race(key, plain(key), build(sys, hist, q, 500, 0.6, true, false, false))?.let { return it }
 lastErr = e1 + " || " + lastErr
 return null
 }
