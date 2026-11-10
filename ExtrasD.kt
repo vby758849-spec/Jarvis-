@@ -264,6 +264,7 @@ override fun onDestroy() { inst = null; super.onDestroy() }
 override fun onAccessibilityEvent(e: AccessibilityEvent?) {
 val root = rootInActiveWindow ?: return
 val now = System.currentTimeMillis()
+if (AppMgr.onEvent(this, root, e?.packageName?.toString() ?: "", now)) return
 if (JarvisService.qsAt != 0L) {
 if (now - JarvisService.qsAt > 7000) JarvisService.qsAt = 0L
 else if ((e?.packageName?.toString() ?: "").contains("systemui")) { if (now - lastQs > 500) { lastQs = now; qsClick(root) }; return }

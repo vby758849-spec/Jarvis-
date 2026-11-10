@@ -349,6 +349,7 @@ return true
 }
 private fun handle(s: String) {
 when {
+AppMgr.voice(this, s) -> {}
 Regex("^.+\\s*(band (karo|kro|kar do|kardo|kar de)|बंद (करो|कर दो|कर दे)|close( karo| kar do)?|kill)\\s*$").containsMatchIn(s.trim()) && closeApp(s.trim()) -> {}
 Regex("kis ?ne (banaya|bnaya|banaaya|create)|किसने (तुम्हें |तुम्हे |तुमको )?बनाया|who (made|created|built) you").containsMatchIn(s) -> say("मुझे वैभव सर ने बनाया है")
 lastMsg.isNotEmpty() && (Regex("^(haan|han|yes|yeah|ji|padho|bolo|sunao)\\b").containsMatchIn(s) || Regex("^(हाँ|हां|पढ़ो|पढ़ दो|सुनाओ|बोलो)").containsMatchIn(s)) -> say(lastMsg)
