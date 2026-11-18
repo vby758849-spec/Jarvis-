@@ -25,7 +25,7 @@ import kotlin.math.cos
 
 /**
  * Siri-style ring: while Jarvis is speaking, a glowing golden ring fades in at the centre of the screen,
- * pulses with the voice, sways a little, and throws sparkles. It never takes touches.
+ * pulses with the voice, keeps turning round, and throws sparkles. It never takes touches.
  *
  * Needs the picture res/drawable-nodpi/ring.png (copied by the build from ring.png in the repo).
  * If the picture is missing it draws a simple golden ring instead, so the app never breaks.
@@ -132,7 +132,7 @@ object SpeakRing {
 
             val cx = width / 2f; val cy = height / 2f; val r = width * 0.33f
             val sc = (0.55f + 0.45f * easeOutBack(appear)) * (1f + 0.07f * lvl)
-            val sway = 9f * sin(t * 0.9f) + 3f * sin(t * 2.3f + 0.7f)
+            val spin = (t * 40f) % 360f // full turn every 9 seconds, same picture, just rotating
             val a = appear.coerceIn(0f, 1f)
 
             // soft golden glow that breathes with the voice
@@ -141,20 +141,15 @@ object SpeakRing {
             canvas.drawCircle(cx, cy, r * 1.55f, glow)
             canvas.restore()
 
-            // the ring itself, plus a faint ghost copy turning the other way
+            // the ring itself: the picture exactly as it is, turning round and round
             if (bmp != null) {
-                canvas.save(); canvas.scale(sc * 1.1f, sc * 1.1f, cx, cy); canvas.rotate(-sway * 1.8f, cx, cy)
+                canvas.save(); canvas.scale(sc, sc, cx, cy); canvas.rotate(spin, cx, cy)
                 dst.set(cx - r, cy - r, cx + r, cy + r)
-                img.alpha = (255f * 0.22f * a).toInt().coerceIn(0, 255)
-                canvas.drawBitmap(bmp, null, dst, img)
-                canvas.restore()
-
-                canvas.save(); canvas.scale(sc, sc, cx, cy); canvas.rotate(sway, cx, cy)
-                img.alpha = (255f * (0.80f + 0.20f * lvl + 0.04f * sin(t * 25f)) * a).toInt().coerceIn(0, 255)
+                img.alpha = (255f * a).toInt().coerceIn(0, 255)
                 canvas.drawBitmap(bmp, null, dst, img)
                 canvas.restore()
             } else {
-                canvas.save(); canvas.scale(sc, sc, cx, cy); canvas.rotate(sway, cx, cy)
+                canvas.save(); canvas.scale(sc, sc, cx, cy); canvas.rotate(spin, cx, cy)
                 edge.alpha = (255f * a).toInt().coerceIn(0, 255); core.alpha = edge.alpha
                 edge.strokeWidth = r * 0.07f; canvas.drawCircle(cx, cy, r * 0.95f, edge)
                 edge.strokeWidth = r * 0.03f; canvas.drawCircle(cx, cy, r * 0.62f, edge)
