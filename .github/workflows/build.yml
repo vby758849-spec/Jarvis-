@@ -261,7 +261,7 @@ jobs:
      mkdir -p app/src/main/java/com/vaibhav/jarvis
      cp *.kt app/src/main/java/com/vaibhav/jarvis/
      mkdir -p app/src/main/res/drawable-nodpi
-     cp hud.jpg blueprint.jpg app/src/main/res/drawable-nodpi/ || true
+   cp hud.jpg blueprint.jpg ring.png app/src/main/res/drawable-nodpi/ || true
   - run: gradle assembleDebug --no-daemon
   - uses: actions/upload-artifact@v4
     with:
