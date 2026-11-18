@@ -156,7 +156,7 @@ super.onDestroy()
 }
 fun wakeNow() { h.post { say(if (isEn()) "Yes boss?" else "जी बॉस?"); h.postDelayed({ stayAwake(10000) }, 1500) } }
 private val floatLoop = object : Runnable {
-override fun run() { FloatOrb.update(this@JarvisService, sp.getBoolean("float", false)); h.postDelayed(this, 400) }
+override fun run() { FloatOrb.update(this@JarvisService, sp.getBoolean("float", false)); SpeakRing.tick(this@JarvisService); h.postDelayed(this, 400) }
 }
 fun isEn() = sp.getString("lang", "en") == "en"
 private fun curPt() = sp.getFloat("pt", 0.85f)
